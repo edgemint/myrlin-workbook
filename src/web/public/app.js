@@ -8862,6 +8862,23 @@ class CWMApp {
   }
 
   /**
+   * Returns a Set of all sessionIds currently open in any terminal pane,
+   * across the active tab group and all cached (non-active) tab groups.
+   */
+  getActiveTerminalSessionIds() {
+    const ids = new Set();
+    for (const tp of this.terminalPanes) {
+      if (tp) ids.add(tp.sessionId);
+    }
+    for (const cached of Object.values(this._groupPaneCache || {})) {
+      for (const pane of (cached.panes || [])) {
+        if (pane) ids.add(pane.sessionId);
+      }
+    }
+    return ids;
+  }
+
+  /**
    * Update the activity indicator on a terminal pane header.
    * Called when 'terminal-activity' events fire from TerminalPane.
    */
