@@ -102,7 +102,9 @@ function readRequireAuthFromFile(filePath) {
         return config.requireAuth;
       }
     }
-  } catch (_) {}
+  } catch (_) {
+    // Corrupted config - skip
+  }
   return true; // default: auth required
 }
 
@@ -188,8 +190,7 @@ function loadRequireAuth() {
   }
   // Home config takes priority over local
   if (fs.existsSync(HOME_CONFIG_FILE)) {
-    const val = readRequireAuthFromFile(HOME_CONFIG_FILE);
-    if (!val) return false; // explicitly disabled
+    return readRequireAuthFromFile(HOME_CONFIG_FILE);
   }
   return readRequireAuthFromFile(LOCAL_CONFIG_FILE);
 }
