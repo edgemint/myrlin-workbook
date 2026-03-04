@@ -316,6 +316,23 @@ async function run() {
   check('GET /api/quota-overview → 200', r.status === 200);
 
   // ════════════════════════════════════════
+  // PROJECT DEFAULTS
+  // ════════════════════════════════════════
+  console.log('\n--- Project Defaults ---');
+
+  r = await get('/api/project-defaults');
+  check('GET /api/project-defaults returns object', r.status === 200 && typeof json(r) === 'object');
+
+  r = await put('/api/project-defaults/test-encoded-name', { defaultDir: 'C:/Projects/test' });
+  check('PUT /api/project-defaults sets defaultDir', r.status === 200 && json(r)?.success === true);
+
+  r = await get('/api/project-defaults');
+  check('GET /api/project-defaults contains saved entry', json(r)?.['test-encoded-name']?.defaultDir === 'C:/Projects/test');
+
+  r = await put('/api/project-defaults/test-encoded-name', { defaultDir: '' });
+  check('PUT /api/project-defaults can clear defaultDir', r.status === 200 && json(r)?.success === true);
+
+  // ════════════════════════════════════════
   // CLEANUP
   // ════════════════════════════════════════
   console.log('\n--- Cleanup ---');
