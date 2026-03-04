@@ -14837,7 +14837,8 @@ class CWMApp {
       const dirParts = dir.replace(/\\/g, '/').split('/').filter(Boolean);
       const projectName = dirParts[dirParts.length - 1] || 'project';
 
-      // Check if a workspace already exists for this directory
+      // Find a workspace for this project: first by matching an existing session's
+      // workingDir, then by workspace name, then auto-create one.
       let workspaceId = null;
       for (const ws of (this.state.workspaces || [])) {
         const wsSessions = (this.state.allSessions || []).filter(s => s.workspaceId === ws.id);
@@ -14846,13 +14847,22 @@ class CWMApp {
           break;
         }
       }
+      if (!workspaceId) {
+        const nameMatch = (this.state.workspaces || []).find(ws => ws.name.toLowerCase() === projectName.toLowerCase());
+        if (nameMatch) workspaceId = nameMatch.id;
+      }
+      if (!workspaceId) {
+        const wsData = await this.api('POST', '/api/workspaces', { name: projectName });
+        workspaceId = (wsData.workspace || wsData).id;
+        await this.loadWorkspaces();
+      }
 
       const payload = {
         name,
         workingDir: dir,
         command: 'claude',
+        workspaceId,
       };
-      if (workspaceId) payload.workspaceId = workspaceId;
       if (model) payload.model = model;
 
       const data = await this.api('POST', '/api/sessions', payload);
