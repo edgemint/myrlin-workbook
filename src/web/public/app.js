@@ -1850,6 +1850,25 @@ class CWMApp {
     // Restore sidebar width & collapse state from localStorage
     this.restoreSidebarState();
 
+    const authRequired = await this.fetchAuthConfig();
+    this.state.authRequired = authRequired;
+
+    if (!authRequired) {
+      this.showApp();
+      this.initDragAndDrop();
+      this.initTerminalResize();
+      this.initTerminalGroups();
+      // Initialize mobile swipe gestures for pane switching
+      this.initTerminalPaneSwipe();
+      this.initNotesEditor();
+      this.initAIInsights();
+      await this.loadAll();
+      this.connectSSE();
+      this.startConflictChecks();
+      this.checkForUpdates();
+      return;
+    }
+
     if (this.state.token) {
       const valid = await this.checkAuth();
       if (valid) {
@@ -1894,10 +1913,12 @@ class CWMApp {
       const res = await fetch(path, opts);
 
       if (res.status === 401) {
-        this.state.token = null;
-        localStorage.removeItem('cwm_token');
-        this.showLogin();
-        this.disconnectSSE();
+        if (this.state.authRequired !== false) {
+          this.state.token = null;
+          localStorage.removeItem('cwm_token');
+          this.showLogin();
+          this.disconnectSSE();
+        }
         const apiErr = new Error('Unauthorized');
         apiErr.status = res.status;
         throw apiErr;
@@ -1925,6 +1946,15 @@ class CWMApp {
   /* ═══════════════════════════════════════════════════════════
      AUTHENTICATION
      ═══════════════════════════════════════════════════════════ */
+
+  async fetchAuthConfig() {
+    try {
+      const data = await fetch('/api/auth/config').then(r => r.json());
+      return data.requireAuth !== false; // treat missing as true
+    } catch {
+      return true; // default to requiring auth on network error
+    }
+  }
 
   async checkAuth() {
     try {
