@@ -4180,7 +4180,12 @@ class CWMApp {
             this.showToast('Browser notifications are not supported in this browser.', 'error');
             return;
           }
-          const permission = await Notification.requestPermission();
+          const permissionPromise = Notification.requestPermission();
+          const permission = await (
+            typeof permissionPromise === 'undefined'
+              ? new Promise(resolve => Notification.requestPermission(resolve))
+              : permissionPromise
+          );
           if (permission !== 'granted') {
             e.target.checked = false;
             this.showToast('Browser notification permission was denied. Enable it in your browser settings.', 'error');
@@ -4233,6 +4238,12 @@ class CWMApp {
 
   /** Apply current settings to the UI (CSS classes, visibility toggles) */
   applySettings() {
+    // Reconcile browserNotifications setting with actual browser permission state
+    if (this.state.settings.browserNotifications && Notification.permission !== 'granted') {
+      this.state.settings.browserNotifications = false;
+      this.saveSettings();
+    }
+
     const html = document.documentElement;
 
     // Pane color highlights
@@ -9219,6 +9230,7 @@ class CWMApp {
   onTerminalIdle({ sessionId, sessionName }) {
     const sessionIdx = this.terminalPanes.findIndex(tp => tp && tp.sessionId === sessionId);
     const name = sessionName || sessionId.substring(0, 12);
+    if (sessionIdx === -1) return;
 
     // In-app notifications (gated by completionNotifications setting)
     if (this.getSetting('completionNotifications') && sessionIdx !== this._activeTerminalSlot) {
@@ -9244,7 +9256,7 @@ class CWMApp {
     }
 
     // OS-level browser notification (independent of in-app notifications)
-    if (this.getSetting('browserNotifications') && Notification.permission === 'granted') {
+    if (this.getSetting('browserNotifications') && Notification.permission === 'granted' && sessionIdx !== this._activeTerminalSlot) {
       new Notification('CWM', {
         body: `${name} is ready for input`,
         icon: '/favicon.ico',
