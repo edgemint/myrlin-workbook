@@ -866,17 +866,31 @@ app.get('/api/discover', requireAuth, (req, res) => {
       const projectDir = path.join(claudeDir, entry.name);
       const realPath = resolveProjectPath(projectDir, entry.name);
 
-      // Count .jsonl session files and compute total size
+      // Count .jsonl session files and compute total size.
+      // Only include files that contain at least one user message — stubs (file-history
+      // snapshots, sessions killed before any conversation turn) cannot be resumed and
+      // should not appear in the session list.
       let sessionFiles = [];
       let totalSize = 0;
       try {
         sessionFiles = fs.readdirSync(projectDir)
           .filter(f => f.endsWith('.jsonl'))
           .map(f => {
-            const stat = fs.statSync(path.join(projectDir, f));
+            const filePath = path.join(projectDir, f);
+            const stat = fs.statSync(filePath);
             totalSize += stat.size;
-            return { name: f.replace('.jsonl', ''), modified: stat.mtime, size: stat.size };
+            // Peek the first 16 KB to check for a real conversation turn.
+            let hasConversation = false;
+            try {
+              const peekSize = Math.min(16384, stat.size);
+              const buf = Buffer.alloc(peekSize);
+              const fd = fs.openSync(filePath, 'r');
+              try { fs.readSync(fd, buf, 0, peekSize, 0); } finally { fs.closeSync(fd); }
+              hasConversation = buf.includes('"type":"user"') || buf.includes('"type": "user"');
+            } catch (_) {}
+            return { name: f.replace('.jsonl', ''), modified: stat.mtime, size: stat.size, hasConversation };
           })
+          .filter(s => s.hasConversation)
           .sort((a, b) => b.modified - a.modified);
       } catch (_) {
         // skip if can't read
