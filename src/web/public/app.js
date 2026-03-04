@@ -121,6 +121,7 @@ class CWMApp {
       resourceData: null,
       gitStatusCache: {},
       sessionNames: {},
+      sessionNameSources: {},
       settings: Object.assign({
         paneColorHighlights: true,
         activityIndicators: true,
@@ -2064,9 +2065,16 @@ class CWMApp {
   async loadSessionNames() {
     try {
       const data = await this.api('GET', '/api/session-names');
-      this.state.sessionNames = (data && typeof data === 'object') ? data : {};
+      if (data && typeof data === 'object') {
+        this.state.sessionNames = (data.names && typeof data.names === 'object') ? data.names : (data.names === undefined ? data : {});
+        this.state.sessionNameSources = (data.sources && typeof data.sources === 'object') ? data.sources : {};
+      } else {
+        this.state.sessionNames = {};
+        this.state.sessionNameSources = {};
+      }
     } catch (_) {
       this.state.sessionNames = {};
+      this.state.sessionNameSources = {};
     }
 
     // ── One-time migration from legacy localStorage key ──
@@ -3467,20 +3475,35 @@ class CWMApp {
   }
 
   /**
+   * Get the name source for a Claude session UUID.
+   * @param {string} claudeSessionId
+   * @returns {'auto' | 'manual' | null}
+   */
+  getSessionNameSource(claudeSessionId) {
+    return (this.state.sessionNameSources && this.state.sessionNameSources[claudeSessionId]) || null;
+  }
+
+  /**
    * Persist a session display name to the server and update the local map.
    * Single source of truth — no localStorage writes, no fire-and-forget loops.
    * @param {string} claudeSessionId - Claude UUID
    * @param {string} title - Display name to store
    */
-  async syncSessionTitle(claudeSessionId, title) {
+  async syncSessionTitle(claudeSessionId, title, source = 'manual') {
     if (!claudeSessionId || !title || typeof title !== 'string' || title.trim() === '') return;
     const trimmed = title.trim();
     try {
-      await this.api('PUT', `/api/session-names/${encodeURIComponent(claudeSessionId)}`, { name: trimmed });
-      // Update local map so callers see the change immediately without a reload
+      await this.api('PUT', `/api/session-names/${encodeURIComponent(claudeSessionId)}`, { name: trimmed, source });
+      // Update local maps immediately so callers see the change without reload
       if (!this.state.sessionNames) this.state.sessionNames = {};
+      if (!this.state.sessionNameSources) this.state.sessionNameSources = {};
+      // Mirror server-side guard: auto cannot overwrite manual locally either
+      if (source === 'auto' && this.state.sessionNameSources[claudeSessionId] === 'manual') return;
       this.state.sessionNames[claudeSessionId] = trimmed;
+      this.state.sessionNameSources[claudeSessionId] = source;
     } catch (err) {
+      // 409 means server rejected auto-assign due to manual name — not an error worth toasting
+      if (err.status === 409 || (err.message || '').includes('409')) return;
       this.showToast('Failed to save session name: ' + (err.message || 'unknown error'), 'error');
     }
   }
