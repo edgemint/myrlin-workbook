@@ -1724,6 +1724,17 @@ class CWMApp {
           const chevron = header.querySelector('.project-accordion-chevron');
           body.hidden = !body.hidden;
           chevron.classList.toggle('open', !body.hidden);
+          // Track as active project context for the New Session button
+          const encoded = accordion.dataset.encoded;
+          const projectPath = accordion.dataset.path || '';
+          const projectName = accordion.querySelector('.project-name')?.textContent?.trim() || encoded;
+          const defaultDir = (this.state.projectDefaults[encoded] || {}).defaultDir || '';
+          this.state.activeProjectContext = {
+            name: projectName,
+            realPath: projectPath,
+            encodedName: encoded,
+            defaultDir,
+          };
         }
       });
 
