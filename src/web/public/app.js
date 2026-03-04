@@ -114,6 +114,8 @@ class CWMApp {
       hiddenSessions: new Set(JSON.parse(localStorage.getItem('cwm_hiddenSessions') || '[]')),
       hiddenProjectSessions: new Set(JSON.parse(localStorage.getItem('cwm_hiddenProjectSessions') || '[]')),
       hiddenProjects: new Set(JSON.parse(localStorage.getItem('cwm_hiddenProjects') || '[]')),
+      projectDefaults: {},          // { [encodedName]: { defaultDir } } — loaded from server
+      activeProjectContext: null,   // { name, realPath, encodedName, defaultDir } — set on project click
       projectSearchQuery: '',
       showHidden: false,
       resourceData: null,
@@ -1977,6 +1979,7 @@ class CWMApp {
       this.loadStats(),
       this.loadGroups(),
       this.loadProjects(),
+      this.loadProjectDefaults(),
     ]);
 
     // Restore active workspace from localStorage if still valid
@@ -8145,6 +8148,15 @@ class CWMApp {
       this.renderProjects();
     } catch {
       // Non-critical - projects panel just stays empty
+    }
+  }
+
+  async loadProjectDefaults() {
+    try {
+      const data = await this.api('GET', '/api/project-defaults');
+      this.state.projectDefaults = data || {};
+    } catch {
+      // Non-critical
     }
   }
 
