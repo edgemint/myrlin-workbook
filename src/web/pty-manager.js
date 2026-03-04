@@ -458,26 +458,19 @@ class PtySessionManager {
       }
 
       // Initial detection after 8s (Claude needs time to create the JSONL file)
-      const initTimer = setTimeout(() => {
+      // Store on session so killSession can clear them (matching pingInterval pattern)
+      session._uuidInitTimer = setTimeout(() => {
         const newest = findNewestJsonl();
         if (newest) applyDetectedUUID(newest.uuid, newest.mtime);
       }, 8000);
 
       // Polling interval: pick up /clear-generated UUIDs while the session runs
-      const pollInterval = setInterval(() => {
+      session._uuidPollInterval = setInterval(() => {
         const newest = findNewestJsonl();
         if (newest && newest.mtime > trackedMtime) {
           applyDetectedUUID(newest.uuid, newest.mtime);
         }
       }, 30000); // every 30s
-
-      // Clean up timers when the session is destroyed
-      const origDestroy = session.destroy ? session.destroy.bind(session) : null;
-      session.destroy = () => {
-        clearTimeout(initTimer);
-        clearInterval(pollInterval);
-        if (origDestroy) origDestroy();
-      };
     }
 
     return session;
@@ -655,6 +648,16 @@ class PtySessionManager {
     if (session.pingInterval) {
       clearInterval(session.pingInterval);
       session.pingInterval = null;
+    }
+
+    // Clear UUID detection timers
+    if (session._uuidInitTimer) {
+      clearTimeout(session._uuidInitTimer);
+      session._uuidInitTimer = null;
+    }
+    if (session._uuidPollInterval) {
+      clearInterval(session._uuidPollInterval);
+      session._uuidPollInterval = null;
     }
 
     // Kill the PTY process
