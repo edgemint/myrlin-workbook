@@ -8901,7 +8901,8 @@ class CWMApp {
           this.setViewMode('terminal');
           this.switchTerminalGroup(groupId);
           // Give switchTerminalGroup time to restore panes before focusing
-          setTimeout(() => this.setActiveTerminalPane(i), 50);
+          const paneIndex = i;
+          setTimeout(() => this.setActiveTerminalPane(paneIndex), 100);
           return true;
         }
       }
