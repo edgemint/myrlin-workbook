@@ -2050,6 +2050,7 @@ class CWMApp {
     const migrations = Object.entries(legacy)
       .filter(([uuid, name]) => uuid && name && !serverMap[uuid]);
 
+    let migratedCount = 0;
     if (migrations.length > 0) {
       // Fire migrations in parallel — tolerate individual failures
       await Promise.allSettled(
@@ -2057,18 +2058,16 @@ class CWMApp {
           try {
             await this.api('PUT', `/api/session-names/${encodeURIComponent(uuid)}`, { name });
             serverMap[uuid] = name; // Update local map immediately
+            migratedCount++;
           } catch (_) {
-            // Leave the localStorage entry intact if the PUT fails
-            delete legacy[uuid]; // Don't count it as migrated
+            // Silently skip failed entries — they'll appear nameless until re-titled
           }
         })
       );
     }
 
-    // Remove the legacy key — entries that failed to migrate will be lost
-    // (acceptable: they'll just appear nameless until re-titled)
     localStorage.removeItem('cwm_projectSessionTitles');
-    console.log(`[CWM] Migrated ${migrations.length} session name(s) from localStorage to server.`);
+    console.log(`[CWM] Migrated ${migratedCount}/${migrations.length} session name(s) from localStorage to server.`);
   }
 
   async loadWorkspaces() {
