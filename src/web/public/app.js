@@ -8262,6 +8262,7 @@ class CWMApp {
   }
 
   renderProjects() {
+    const activeIds = this.getActiveTerminalSessionIds();
     const list = this.els.projectsList;
     if (!list) return;
 
@@ -8336,7 +8337,9 @@ class CWMApp {
         const tooltip = storedTitle
           ? `${storedTitle}\n\nSession: ${sessName}`
           : sessName;
-        return `<div class="project-session-item" draggable="true" data-session-name="${this.escapeHtml(sessName)}" data-project-path="${this.escapeHtml(p.realPath || '')}" data-project-encoded="${this.escapeHtml(encoded)}" title="${this.escapeHtml(tooltip)}">
+        const isOpen = activeIds.has(sessName);
+        return `<div class="project-session-item${isOpen ? ' project-session-open' : ''}" draggable="true" data-session-name="${this.escapeHtml(sessName)}" data-project-path="${this.escapeHtml(p.realPath || '')}" data-project-encoded="${this.escapeHtml(encoded)}" title="${this.escapeHtml(tooltip)}">
+          ${isOpen ? '<span class="project-session-active-icon">&#10003;</span>' : ''}
           <span class="project-session-name">${this.escapeHtml(displayName)}</span>
           ${sessSize ? `<span class="project-session-size">${sessSize}</span>` : ''}
           ${sessTime ? `<span class="project-session-time">${sessTime}</span>` : ''}
