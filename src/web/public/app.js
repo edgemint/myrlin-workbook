@@ -1726,9 +1726,32 @@ class CWMApp {
           this.createSession({ name: projectName, workingDir: defaultDir });
           return;
         }
+        const sessionItem = e.target.closest('.project-session-item');
+        if (sessionItem) {
+          e.stopPropagation();
+          const sessName = sessionItem.dataset.sessionName;
+          const projectPath = sessionItem.dataset.projectPath;
+          // Already open → redirect focus
+          if (this.focusPaneBySessionId(sessName)) {
+            this.showToast('Focused existing session', 'info');
+            return;
+          }
+          // Not open → open in next empty pane
+          const emptySlot = this.terminalPanes.findIndex(p => p === null);
+          if (emptySlot !== -1) {
+            this.openTerminalInPane(emptySlot, sessName, sessName, {
+              cwd: projectPath,
+              resumeSessionId: sessName,
+              command: 'claude',
+            });
+            this.setViewMode('terminal');
+          } else {
+            this.showToast('All panes are occupied — close one first', 'warning');
+          }
+          return;
+        }
         const header = e.target.closest('.project-accordion-header');
         if (header) {
-          if (e.target.closest('.project-session-item')) return;
           const accordion = header.closest('.project-accordion');
           const body = accordion.querySelector('.project-accordion-body');
           const chevron = header.querySelector('.project-accordion-chevron');
