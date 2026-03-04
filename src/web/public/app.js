@@ -122,6 +122,7 @@ class CWMApp {
         paneColorHighlights: true,
         activityIndicators: true,
         completionNotifications: true,
+        browserNotifications: false,
         sessionCountInHeader: true,
         confirmBeforeClose: true,
         autoOpenTerminal: true,
