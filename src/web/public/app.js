@@ -2007,9 +2007,6 @@ class CWMApp {
       this.loadSessionNames(),
     ]);
 
-    // Re-render projects now that sessionNames is fully populated
-    this.renderProjects();
-
     // Restore active workspace from localStorage if still valid
     if (savedWorkspaceId && !this.state.activeWorkspace) {
       const ws = this.state.workspaces.find(w => w.id === savedWorkspaceId);
