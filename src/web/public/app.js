@@ -8888,6 +8888,14 @@ class CWMApp {
       if (idx !== -1) this.closeTerminalPane(idx);
     };
 
+    // Auto-assign terminal title as session name if no name exists yet
+    tp.onTitleChange = async (title, sessionId) => {
+      if (!title || !sessionId) return;
+      if (this.getSessionNameSource(sessionId) === 'manual') return;
+      await this.syncSessionTitle(sessionId, title, 'auto');
+      this.renderProjects(); // Refresh Discovered section to show updated name
+    };
+
     // Enable auto-trust if the setting is on
     tp._autoTrustEnabled = !!this.state.settings.autoTrustDialogs;
 
