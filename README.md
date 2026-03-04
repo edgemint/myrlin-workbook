@@ -54,6 +54,22 @@ CWM_PASSWORD=mypassword npx tomnar-workbook
 
 Password lookup order: `CWM_PASSWORD` env var > `~/.tomnar/config.json` > `./state/config.json` > auto-generate.
 
+### Disabling the Login Screen
+
+Set `requireAuth: false` in `state/config.json` (or `~/.tomnar/config.json`) to skip authentication entirely:
+
+```json
+{ "requireAuth": false }
+```
+
+Alternatively, set the `CWM_NO_AUTH=1` environment variable:
+
+```bash
+CWM_NO_AUTH=1 npm run gui
+```
+
+> **Warning:** Only disable auth when the server is not exposed to untrusted networks.
+
 ### Prerequisites
 
 - **Node.js 18+** ([download](https://nodejs.org))
