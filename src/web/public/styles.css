@@ -3755,6 +3755,14 @@ textarea.input {
 .project-session-size { font-size: 10px; color: var(--overlay0); font-family: var(--font-mono); }
 .project-session-time { font-size: 10px; color: var(--overlay0); }
 .project-session-item.dragging { opacity: 0.4; }
+.project-session-item.project-session-open { cursor: pointer; }
+.project-session-active-icon {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: bold;
+  flex-shrink: 0;
+  line-height: 1;
+}
 
 /* Legacy flat project item (keep for compatibility) */
 .project-item {
