@@ -1898,12 +1898,16 @@ class CWMApp {
         localStorage.removeItem('cwm_token');
         this.showLogin();
         this.disconnectSSE();
-        throw new Error('Unauthorized');
+        const apiErr = new Error('Unauthorized');
+        apiErr.status = res.status;
+        throw apiErr;
       }
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Request failed (${res.status})`);
+        const apiErr = new Error(errBody.error || `Request failed (${res.status})`);
+        apiErr.status = res.status;
+        throw apiErr;
       }
 
       // Handle 204 No Content
