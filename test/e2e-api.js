@@ -388,7 +388,8 @@ async function run() {
   // GET returns 200 with an object
   r = await get('/api/session-names');
   check('GET /api/session-names → 200', r.status === 200);
-  check('GET /api/session-names → object', typeof json(r) === 'object' && json(r) !== null);
+  const snMap = json(r);
+  check('GET /api/session-names → object', typeof snMap === 'object' && snMap !== null);
 
   // PUT a name for a test UUID
   r = await put('/api/session-names/test-uuid-abc', { name: 'My Test Session' });
