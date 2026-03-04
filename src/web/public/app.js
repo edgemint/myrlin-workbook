@@ -3147,6 +3147,40 @@ class CWMApp {
       });
     }
 
+    // Set default directory for new sessions
+    const currentDefault = (this.state.projectDefaults[encodedName] || {}).defaultDir || '';
+    items.push({ type: 'sep' });
+    items.push({
+      label: currentDefault ? `Default Dir: ${currentDefault.split(/[/\\]/).pop()}` : 'Set Default Directory',
+      icon: '&#128194;',
+      action: async () => {
+        const resultPromise = this.showPromptModal({
+          title: `Default Directory — ${displayName}`,
+          fields: [
+            {
+              key: 'defaultDir',
+              label: 'Working Directory',
+              placeholder: projectPath || '~/projects/my-app',
+              value: currentDefault,
+            },
+          ],
+          confirmText: 'Save',
+          confirmClass: 'btn-primary',
+        });
+        requestAnimationFrame(() => this._injectBrowseButton('modal-field-defaultDir'));
+        const result = await resultPromise;
+        if (result === null) return;
+        const dir = result.defaultDir || '';
+        try {
+          await this.api('PUT', `/api/project-defaults/${encodeURIComponent(encodedName)}`, { defaultDir: dir });
+          this.state.projectDefaults[encodedName] = { defaultDir: dir };
+          this.showToast(dir ? `Default dir set for "${displayName}"` : `Default dir cleared for "${displayName}"`, 'success');
+        } catch (err) {
+          this.showToast(err.message || 'Failed to save default directory', 'error');
+        }
+      },
+    });
+
     this._renderContextItems(displayName, items, x, y);
   }
 
