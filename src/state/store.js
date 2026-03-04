@@ -36,6 +36,7 @@ const DEFAULT_STATE = {
     notificationLevel: 'all', // 'all' | 'errors' | 'none'
     theme: 'dark',
     confirmBeforeClose: true,
+    subscriptionBudget: 0,  // 0 = feature disabled; user sets e.g. 100 or 200
   },
 };
 

@@ -1667,6 +1667,7 @@ const DEFAULT_PRICING = { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3
 /** In-memory cost cache: keyed by sessionId, stores { mtime, result } */
 const _costCache = new Map();
 const COST_CACHE_TTL = 60000; // 60 seconds
+let _rollingCache = null; // { ts: number, data: object }
 
 /**
  * Find a JSONL file for a given Claude session UUID by scanning
@@ -2503,6 +2504,88 @@ app.get('/api/cost/dashboard', requireAuth, (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to get cost dashboard: ' + err.message });
   }
+});
+
+/**
+ * GET /api/settings
+ * Returns the current server-side settings (e.g. subscriptionBudget).
+ */
+app.get('/api/settings', requireAuth, (req, res) => {
+  res.json(getStore().settings);
+});
+
+/**
+ * PUT /api/settings
+ * Updates allowed server-side settings.
+ */
+app.put('/api/settings', requireAuth, (req, res) => {
+  const allowed = ['subscriptionBudget'];
+  const updates = {};
+  for (const k of allowed) {
+    if (k in req.body) updates[k] = req.body[k];
+  }
+  getStore().updateSettings(updates);
+  _rollingCache = null; // Invalidate rolling cache when budget changes
+  res.json(getStore().settings);
+});
+
+/**
+ * GET /api/cost/rolling
+ * Returns rolling 5-hour and 7-day usage costs and % of subscription budget.
+ * Uses cached session cost data with proration by window overlap.
+ */
+app.get('/api/cost/rolling', requireAuth, (req, res) => {
+  const now = Date.now();
+  const window5h = 5 * 60 * 60 * 1000;
+  const window7d  = 7 * 24 * 60 * 60 * 1000;
+
+  // 30s aggregate cache to avoid recomputing on every request
+  if (_rollingCache && (now - _rollingCache.ts) < 30000) {
+    return res.json(_rollingCache.data);
+  }
+
+  const budget = getStore().settings.subscriptionBudget || 0;
+  let cost5h = 0, messages5h = 0;
+  let cost7d  = 0, messages7d  = 0;
+
+  for (const [, cached] of _costCache) {
+    const result = cached.result;
+    if (!result || !result.cost) continue;
+
+    const sessionCost = result.cost.total || 0;
+    const sessionMsgs = result.messageCount || 0;
+    const first = result.firstMessage ? new Date(result.firstMessage).getTime() : null;
+    const last  = result.lastMessage  ? new Date(result.lastMessage).getTime()  : null;
+    if (!first || !last || last < now - window7d) continue;
+
+    // Prorate by window overlap fraction
+    const duration = Math.max(1, last - first);
+    const overlap5h = Math.max(0, Math.min(last, now) - Math.max(first, now - window5h));
+    const overlap7d = Math.max(0, Math.min(last, now) - Math.max(first, now - window7d));
+
+    cost5h    += sessionCost * (overlap5h / duration);
+    messages5h += Math.round(sessionMsgs * (overlap5h / duration));
+    cost7d    += sessionCost * (overlap7d / duration);
+    messages7d += Math.round(sessionMsgs * (overlap7d / duration));
+  }
+
+  const budget5h = budget ? budget / 144 : 0;
+  const budget7d  = budget ? budget * 7 / 30 : 0;
+  const pct5h    = budget5h ? (cost5h / budget5h * 100) : null;
+  const pct7d    = budget7d  ? (cost7d  / budget7d  * 100) : null;
+
+  const data = {
+    rolling5h: { cost: Math.round(cost5h * 1000) / 1000, messages: messages5h },
+    rolling7d:  { cost: Math.round(cost7d  * 1000) / 1000, messages: messages7d  },
+    budgetMonthly: budget,
+    budget5h: Math.round(budget5h * 100) / 100,
+    budget7d:  Math.round(budget7d  * 100) / 100,
+    pct5h: pct5h !== null ? Math.round(pct5h * 10) / 10 : null,
+    pct7d:  pct7d  !== null ? Math.round(pct7d  * 10) / 10 : null,
+  };
+
+  _rollingCache = { ts: now, data };
+  res.json(data);
 });
 
 // ──────────────────────────────────────────────────────────
@@ -3936,6 +4019,25 @@ app.delete('/api/features/:id/sessions/:sessionId', requireAuth, (req, res) => {
   const feature = store.unlinkSessionFromFeature(req.params.id, req.params.sessionId);
   if (!feature) return res.status(404).json({ error: 'Feature not found' });
   res.json({ feature });
+});
+
+// ─── Project Defaults ───────────────────────────────────
+
+app.get('/api/project-defaults', requireAuth, (req, res) => {
+  const store = getStore();
+  res.json(store.getProjectDefaults());
+});
+
+app.put('/api/project-defaults/:encodedName', requireAuth, (req, res) => {
+  const { encodedName } = req.params;
+  const { defaultDir } = req.body || {};
+  if (!encodedName) return res.status(400).json({ error: 'encodedName required.' });
+  const sanitized = sanitizeWorkingDir(defaultDir);
+  // Allow empty string to clear the default dir
+  const dirToStore = defaultDir === '' ? '' : (sanitized || '');
+  const store = getStore();
+  const result = store.setProjectDefault(encodedName, { defaultDir: dirToStore });
+  res.json({ success: true, projectDefault: result });
 });
 
 // ──────────────────────────────────────────────────────────
