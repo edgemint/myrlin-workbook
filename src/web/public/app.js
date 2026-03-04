@@ -8879,6 +8879,37 @@ class CWMApp {
   }
 
   /**
+   * Finds a terminal pane by Claude session ID and focuses it.
+   * Checks the active group first, then cached groups (switching if needed).
+   * Also switches the view to 'terminal' so the pane is visible.
+   * @returns {boolean} true if found and focused, false if not open anywhere
+   */
+  focusPaneBySessionId(claudeId) {
+    // Check active group
+    for (let i = 0; i < this.terminalPanes.length; i++) {
+      if (this.terminalPanes[i] && this.terminalPanes[i].sessionId === claudeId) {
+        this.setViewMode('terminal');
+        this.setActiveTerminalPane(i);
+        return true;
+      }
+    }
+    // Check cached (non-active) groups
+    for (const [groupId, cached] of Object.entries(this._groupPaneCache || {})) {
+      const panes = cached.panes || [];
+      for (let i = 0; i < panes.length; i++) {
+        if (panes[i] && panes[i].sessionId === claudeId) {
+          this.setViewMode('terminal');
+          this.switchTerminalGroup(groupId);
+          // Give switchTerminalGroup time to restore panes before focusing
+          setTimeout(() => this.setActiveTerminalPane(i), 50);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * Update the activity indicator on a terminal pane header.
    * Called when 'terminal-activity' events fire from TerminalPane.
    */
