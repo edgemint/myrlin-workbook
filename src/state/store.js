@@ -32,6 +32,7 @@ const DEFAULT_STATE = {
   worktreeTasks: {},      // { taskId: { id, workspaceId, sessionId, featureId, branch, worktreePath, repoDir, description, baseBranch, status, createdAt, completedAt } }
   projectDefaults: {},   // { [encodedName]: { defaultDir: string } }
   sessionNames: {},      // { [claudeUUID]: string } — display names for all sessions
+  sessionNameSources: {}, // { [claudeUUID]: 'auto' | 'manual' }
   settings: {
     autoRecover: true,
     notificationLevel: 'all', // 'all' | 'errors' | 'none'
@@ -119,6 +120,7 @@ class Store extends EventEmitter {
         worktreeTasks: parsed.worktreeTasks || {},
         projectDefaults: parsed.projectDefaults || {},
         sessionNames: parsed.sessionNames || {},
+        sessionNameSources: parsed.sessionNameSources || {},
       };
     } catch (_) {
       return null;
@@ -227,14 +229,18 @@ class Store extends EventEmitter {
    * @param {string} name - Display name (1–200 chars)
    * @returns {{ claudeUUID: string, name: string } | null}
    */
-  setSessionName(claudeUUID, name) {
+  setSessionName(claudeUUID, name, source = 'manual') {
     if (!claudeUUID || typeof claudeUUID !== 'string') return null;
     if (!name || typeof name !== 'string' || name.trim() === '') return null;
     const trimmed = name.trim().slice(0, 200);
     if (!this._state.sessionNames) this._state.sessionNames = {};
+    if (!this._state.sessionNameSources) this._state.sessionNameSources = {};
+    // Never overwrite a manually-set name with an auto-assigned one
+    if (source === 'auto' && this._state.sessionNameSources[claudeUUID] === 'manual') return null;
     this._state.sessionNames[claudeUUID] = trimmed;
+    this._state.sessionNameSources[claudeUUID] = source;
     this._debouncedSave();
-    return { claudeUUID, name: trimmed };
+    return { claudeUUID, name: trimmed, source };
   }
 
   /**
@@ -253,6 +259,24 @@ class Store extends EventEmitter {
    */
   getAllSessionNames() {
     return this._state.sessionNames || {};
+  }
+
+  /**
+   * Get the source ('auto' | 'manual') for a stored session name.
+   * @param {string} claudeUUID
+   * @returns {'auto' | 'manual' | null}
+   */
+  getSessionNameSource(claudeUUID) {
+    if (!claudeUUID || typeof claudeUUID !== 'string') return null;
+    return (this._state.sessionNameSources && this._state.sessionNameSources[claudeUUID]) || null;
+  }
+
+  /**
+   * Return the entire sessionNameSources map.
+   * @returns {{ [claudeUUID: string]: 'auto' | 'manual' }}
+   */
+  getAllSessionNameSources() {
+    return this._state.sessionNameSources || {};
   }
 
   getAllWorkspacesList() {
