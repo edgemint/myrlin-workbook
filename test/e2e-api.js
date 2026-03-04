@@ -381,6 +381,39 @@ async function run() {
   check('Login with no password → 400', r.status === 400);
 
   // ════════════════════════════════════════
+  // SESSION NAMES
+  // ════════════════════════════════════════
+  console.log('\n--- Session Names ---');
+
+  // GET returns 200 with an object
+  r = await get('/api/session-names');
+  check('GET /api/session-names → 200', r.status === 200);
+  check('GET /api/session-names → object', typeof json(r) === 'object' && json(r) !== null);
+
+  // PUT a name for a test UUID
+  r = await put('/api/session-names/test-uuid-abc', { name: 'My Test Session' });
+  check('PUT /api/session-names/:id → 200', r.status === 200);
+  const snResult = json(r);
+  check('PUT /api/session-names/:id → correct claudeId', snResult && snResult.claudeId === 'test-uuid-abc');
+  check('PUT /api/session-names/:id → correct name', snResult && snResult.name === 'My Test Session');
+
+  // GET again — new entry should be present
+  r = await get('/api/session-names');
+  check('GET /api/session-names shows newly PUT entry', json(r)['test-uuid-abc'] === 'My Test Session');
+
+  // Reject empty name
+  r = await put('/api/session-names/test-uuid-abc', { name: '' });
+  check('PUT with empty name → 400', r.status === 400);
+
+  // Reject missing name
+  r = await put('/api/session-names/test-uuid-abc', {});
+  check('PUT with missing name → 400', r.status === 400);
+
+  // No-ID route should 404
+  r = await put('/api/session-names/', { name: 'x' });
+  check('PUT /api/session-names/ (no ID) → 404', r.status === 404);
+
+  // ════════════════════════════════════════
   // LOGOUT (last so error cases above still have auth)
   // ════════════════════════════════════════
   console.log('\n--- Logout ---');
