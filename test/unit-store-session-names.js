@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 // Quick unit test for Store.setSessionName / getSessionName / getAllSessionNames
-const os = require('os');
-const fs = require('fs');
-const path = require('path');
-
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-test-'));
-
 const { Store } = require('../src/state/store');
+// Note: store.js resolves STATE_DIR at module load from __dirname — it cannot be redirected
+// via env var. The 150ms debounce means no disk write occurs before process exit, so
+// these in-memory tests are safe to run without a temp directory.
 const store = new Store();
 store.init();
 
@@ -35,5 +32,4 @@ check('setSessionName with non-string UUID is a no-op',
   (() => { store.setSessionName(null, 'x'); return store.getSessionName(null) === null; })());
 
 console.log(`\n${pass} passed, ${fail} failed`);
-fs.rmSync(tmpDir, { recursive: true, force: true });
 process.exit(fail > 0 ? 1 : 0);
