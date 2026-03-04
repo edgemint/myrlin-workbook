@@ -444,15 +444,8 @@ class PtySessionManager {
           if (store.getSession(sessionId)) {
             store.updateSession(sessionId, { resumeSessionId: newUUID });
           }
-          // Carry the display name forward to the new UUID
-          if (oldUUID) {
-            const existingName = store.getSessionName(oldUUID);
-            if (existingName) {
-              store.setSessionName(newUUID, existingName);
-              console.log(`[PTY] Carried session name "${existingName}" to new UUID ${newUUID}`);
-            }
-          } else {
-            // First UUID detection for this session — carry the store session's display name
+          // On first UUID detection, carry the store session's display name
+          if (!oldUUID) {
             const storeSession = store.getSession(sessionId);
             if (storeSession && storeSession.name) {
               store.setSessionName(newUUID, storeSession.name);

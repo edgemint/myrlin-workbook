@@ -3436,14 +3436,10 @@ class CWMApp {
    * Also checks workspace sessions that link to this Claude session UUID.
    */
   getProjectSessionTitle(claudeSessionId) {
-    // Primary: check server-persisted sessionNames map (loaded at boot)
     if (this.state.sessionNames && this.state.sessionNames[claudeSessionId]) {
       return this.state.sessionNames[claudeSessionId];
     }
-    // Fallback: check linked workspace sessions (covers sessions predating the new system)
-    const allSessions = this.state.allSessions || this.state.sessions || [];
-    const linked = allSessions.find(s => s.resumeSessionId === claudeSessionId && s.name);
-    return linked ? linked.name : null;
+    return null;
   }
 
   /**
