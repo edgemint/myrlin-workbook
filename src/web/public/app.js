@@ -1745,6 +1745,7 @@ class CWMApp {
               command: 'claude',
             });
             this.setViewMode('terminal');
+            this.renderProjects();
           } else {
             this.showToast('All panes are occupied — close one first', 'warning');
           }
@@ -8641,6 +8642,7 @@ class CWMApp {
                 command: 'claude',
               });
               this.showToast('Opening session - drag to a project to save it', 'info');
+              this.renderProjects();
             } catch (err) {
               this.showToast(err.message || 'Failed to open session', 'error');
             }
