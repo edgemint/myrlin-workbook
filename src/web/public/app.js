@@ -269,6 +269,7 @@ class CWMApp {
       detailCostBreakdown: document.getElementById('detail-cost-breakdown'),
       detailTokenBar: document.getElementById('detail-token-bar'),
       detailStartBtn: document.getElementById('detail-start-btn'),
+      detailBypassCb: document.getElementById('detail-bypass-cb'),
       detailStopBtn: document.getElementById('detail-stop-btn'),
       detailRestartBtn: document.getElementById('detail-restart-btn'),
       detailLogs: document.getElementById('detail-logs'),
@@ -639,13 +640,27 @@ class CWMApp {
       if (this.state.selectedSession) this.deleteSession(this.state.selectedSession.id);
     });
     this.els.detailStartBtn.addEventListener('click', () => {
-      if (this.state.selectedSession) this.startSession(this.state.selectedSession.id);
+      if (this.state.selectedSession) {
+        const bypass = this.els.detailBypassCb && this.els.detailBypassCb.checked;
+        if (bypass) {
+          this.startSessionWithFlags(this.state.selectedSession.id, { bypassPermissions: true });
+        } else {
+          this.startSession(this.state.selectedSession.id);
+        }
+      }
     });
     this.els.detailStopBtn.addEventListener('click', () => {
       if (this.state.selectedSession) this.stopSession(this.state.selectedSession.id);
     });
     this.els.detailRestartBtn.addEventListener('click', () => {
-      if (this.state.selectedSession) this.restartSession(this.state.selectedSession.id);
+      if (this.state.selectedSession) {
+        const bypass = this.els.detailBypassCb && this.els.detailBypassCb.checked;
+        if (bypass) {
+          this.restartSessionWithFlags(this.state.selectedSession.id, { bypassPermissions: true });
+        } else {
+          this.restartSession(this.state.selectedSession.id);
+        }
+      }
     });
 
     // Context Menu - dismiss on click outside or Escape
@@ -7738,6 +7753,7 @@ class CWMApp {
     // Control buttons - enable/disable based on status
     const isRunning = status === 'running' || status === 'idle';
     this.els.detailStartBtn.disabled = isRunning;
+    if (this.els.detailBypassCb) this.els.detailBypassCb.checked = !!session.bypassPermissions;
     this.els.detailStopBtn.disabled = !isRunning;
     this.els.detailRestartBtn.disabled = !isRunning;
 
