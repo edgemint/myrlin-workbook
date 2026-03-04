@@ -8627,10 +8627,11 @@ class CWMApp {
             try {
               const project = JSON.parse(projectJson);
               const tempId = 'pty-project-' + Date.now();
-              this.openTerminalInPane(slotIdx, tempId, project.name, {
-                cwd: project.path,
-                command: 'claude',
-              });
+              const dropBehaviour = this.state.settings.projectDropBehavior || 'continue';
+              const spawnOpts = { cwd: project.path, command: 'claude' };
+              if (dropBehaviour === 'new' || dropBehaviour === 'new-bypass') spawnOpts.newSession = true;
+              if (dropBehaviour === 'continue-bypass' || dropBehaviour === 'new-bypass') spawnOpts.bypassPermissions = true;
+              this.openTerminalInPane(slotIdx, tempId, project.name, spawnOpts);
               this.showToast('Opening project - drag to a project to save it', 'info');
             } catch (err) {
               this.showToast(err.message || 'Failed to open project', 'error');
