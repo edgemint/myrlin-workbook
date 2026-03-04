@@ -939,9 +939,10 @@ app.get('/api/discover', requireAuth, (req, res) => {
  */
 function decodeClaudePath(encoded) {
   // ── Windows path: C--Users-Jane-foo → C:\Users\Jane\foo ──
-  const driveMatch = encoded.match(/^([A-Z])--(.*)/);
+  // Claude may generate lowercase drive letters (c--...) so match case-insensitively.
+  const driveMatch = encoded.match(/^([A-Za-z])--(.*)/);
   if (driveMatch) {
-    const drive = driveMatch[1] + ':\\';
+    const drive = driveMatch[1].toUpperCase() + ':\\';
     const rest = driveMatch[2];
     if (!rest) return drive;
 
