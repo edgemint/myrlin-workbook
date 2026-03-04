@@ -8377,6 +8377,7 @@ class CWMApp {
       const sessionItems = sessions.map(s => {
         const sessName = s.name || 'unnamed';
         const storedTitle = this.getProjectSessionTitle(sessName);
+        const isAutoName = storedTitle && this.getSessionNameSource(sessName) === 'auto';
         const displayName = storedTitle || (sessName.length > 24 ? sessName.substring(0, 24) + '...' : sessName);
         const sessSize = s.size ? this.formatSize(s.size) : '';
         const sessTime = s.modified ? this.relativeTime(s.modified) : '';
@@ -8387,7 +8388,7 @@ class CWMApp {
         const isOpen = activeIds.has(sessName);
         return `<div class="project-session-item${isOpen ? ' project-session-open' : ''}" draggable="true" data-session-name="${this.escapeHtml(sessName)}" data-project-path="${this.escapeHtml(p.realPath || '')}" data-project-encoded="${this.escapeHtml(encoded)}" title="${this.escapeHtml(tooltip)}">
           ${isOpen ? '<span class="project-session-active-icon">&#10003;</span>' : ''}
-          <span class="project-session-name">${this.escapeHtml(displayName)}</span>
+          <span class="project-session-name${isAutoName ? ' session-name-auto' : ''}">${this.escapeHtml(displayName)}</span>
           ${sessSize ? `<span class="project-session-size">${sessSize}</span>` : ''}
           ${sessTime ? `<span class="project-session-time">${sessTime}</span>` : ''}
         </div>`;

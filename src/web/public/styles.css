@@ -3752,6 +3752,7 @@ textarea.input {
 }
 .project-session-item:hover { background: var(--surface0); color: var(--text-primary); }
 .project-session-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-session-name.session-name-auto { color: var(--subtext0); }
 .project-session-size { font-size: 10px; color: var(--overlay0); font-family: var(--font-mono); }
 .project-session-time { font-size: 10px; color: var(--overlay0); }
 .project-session-item.dragging { opacity: 0.4; }
