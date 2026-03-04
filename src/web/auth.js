@@ -5,6 +5,7 @@
  * - POST /api/auth/login - Validates password, returns a Bearer token
  * - POST /api/auth/logout - Invalidates the token
  * - GET  /api/auth/check - Validates current token
+ * - GET  /api/auth/config - Returns whether auth is required (public, pre-auth bootstrap)
  *
  * Protected routes use the requireAuth middleware which checks
  * the Authorization: Bearer <token> header.
@@ -188,11 +189,21 @@ function loadRequireAuth() {
   if (process.env.CWM_NO_AUTH === '1' || process.env.CWM_NO_AUTH === 'true') {
     return false;
   }
-  // Home config takes priority over local
-  if (fs.existsSync(HOME_CONFIG_FILE)) {
-    return readRequireAuthFromFile(HOME_CONFIG_FILE);
-  }
-  return readRequireAuthFromFile(LOCAL_CONFIG_FILE);
+  // Home config takes priority over local — but only if it explicitly sets the key
+  try {
+    if (fs.existsSync(HOME_CONFIG_FILE)) {
+      const config = JSON.parse(fs.readFileSync(HOME_CONFIG_FILE, 'utf-8'));
+      if (typeof config.requireAuth === 'boolean') return config.requireAuth;
+    }
+  } catch (_) {}
+  // Fall through to local config
+  try {
+    if (fs.existsSync(LOCAL_CONFIG_FILE)) {
+      const config = JSON.parse(fs.readFileSync(LOCAL_CONFIG_FILE, 'utf-8'));
+      if (typeof config.requireAuth === 'boolean') return config.requireAuth;
+    }
+  } catch (_) {}
+  return true; // default: auth required
 }
 
 const AUTH_REQUIRED = loadRequireAuth();

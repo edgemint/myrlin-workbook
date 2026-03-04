@@ -990,32 +990,32 @@ class CWMApp {
       // Ctrl+K / Cmd+K - Quick Switcher
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        if (this.state.token) this.openQuickSwitcher();
+        if (this.state.authRequired !== false || this.state.token) this.openQuickSwitcher();
       }
       // Ctrl+Shift+F / Cmd+Shift+F - Global Search
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
         e.preventDefault();
-        if (this.state.token) this.openGlobalSearch();
+        if (this.state.authRequired !== false || this.state.token) this.openGlobalSearch();
       }
       // ? key - Help / Feature Discovery (only when no input is focused)
       if (e.key === '?' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
         e.preventDefault();
-        if (this.state.token) this.openQuickSwitcher('help');
+        if (this.state.authRequired !== false || this.state.token) this.openQuickSwitcher('help');
       }
       // F1 - Help / Feature Discovery
       if (e.key === 'F1') {
         e.preventDefault();
-        if (this.state.token) this.openQuickSwitcher('help');
+        if (this.state.authRequired !== false || this.state.token) this.openQuickSwitcher('help');
       }
       // Ctrl+, / Cmd+, - Settings
       if ((e.ctrlKey || e.metaKey) && e.key === ',') {
         e.preventDefault();
-        if (this.state.token) this.openSettings();
+        if (this.state.authRequired !== false || this.state.token) this.openSettings();
       }
       // Ctrl+Shift+N / Cmd+Shift+N - New Worktree Task
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
         e.preventDefault();
-        if (this.state.token && this.state.settings.enableWorktreeTasks) this.openNewTaskDialog();
+        if ((this.state.authRequired !== false || this.state.token) && this.state.settings.enableWorktreeTasks) this.openNewTaskDialog();
       }
       // Escape
       if (e.key === 'Escape') {
@@ -1948,6 +1948,8 @@ class CWMApp {
      ═══════════════════════════════════════════════════════════ */
 
   async fetchAuthConfig() {
+    // Use raw fetch — this.api() adds auth headers and handles 401 redirects,
+    // neither of which are appropriate for a pre-auth bootstrap call.
     try {
       const data = await fetch('/api/auth/config').then(r => r.json());
       return data.requireAuth !== false; // treat missing as true
@@ -2017,7 +2019,11 @@ class CWMApp {
       this.sseRetryTimeout = null;
     }
     this.disconnectSSE();
-    this.showLogin();
+    if (this.state.authRequired === false) {
+      this.showApp();
+    } else {
+      this.showLogin();
+    }
   }
 
 
@@ -7294,7 +7300,8 @@ class CWMApp {
 
     try {
       // SSE doesn't support custom headers, pass token as query param
-      this.eventSource = new EventSource(`/api/events?token=${encodeURIComponent(this.state.token)}`);
+      const sseToken = this.state.token ? `?token=${encodeURIComponent(this.state.token)}` : '';
+      this.eventSource = new EventSource(`/api/events${sseToken}`);
 
       this.eventSource.onopen = () => {
         console.log('[SSE] Connected');
