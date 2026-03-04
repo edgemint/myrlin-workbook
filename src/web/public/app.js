@@ -631,7 +631,10 @@ class CWMApp {
     });
 
     // Session
-    this.els.createSessionBtn.addEventListener('click', () => this.createSession());
+    this.els.createSessionBtn.addEventListener('click', () => {
+      const ctx = this.state.activeProjectContext;
+      this.createSession(ctx ? { name: ctx.name, workingDir: ctx.defaultDir || '' } : {});
+    });
     document.getElementById('discover-btn').addEventListener('click', () => this.discoverSessions());
 
     // Detail actions
@@ -2298,7 +2301,7 @@ class CWMApp {
     this.renderSessions();
   }
 
-  async createSession() {
+  async createSession(opts = {}) {
     // Load templates for quick-launch chips
     let templates = [];
     try {
@@ -2307,9 +2310,9 @@ class CWMApp {
     } catch (_) {}
 
     const fields = [
-      { key: 'name', label: 'Name', placeholder: 'feature-auth', required: true },
+      { key: 'name', label: 'Name', placeholder: 'feature-auth', required: true, value: opts.name || '' },
       { key: 'topic', label: 'Topic', placeholder: 'Working on authentication flow' },
-      { key: 'workingDir', label: 'Working Directory', placeholder: '~/projects/my-app' },
+      { key: 'workingDir', label: 'Working Directory', placeholder: '~/projects/my-app', value: opts.workingDir || '' },
       { key: 'command', label: 'Command', placeholder: 'claude (default)' },
       { key: 'bypassPermissions', label: 'Bypass Permissions', type: 'checkbox', value: false },
     ];
@@ -2361,6 +2364,7 @@ class CWMApp {
     // Inject browse button next to Working Directory field after modal renders
     requestAnimationFrame(() => this._injectBrowseButton('modal-field-workingDir'));
     const result = await resultPromise;
+    this.state.activeProjectContext = null; // Clear after use
 
     if (!result) return;
 
