@@ -30,6 +30,7 @@ const DEFAULT_STATE = {
   templates: {},          // { templateId: { id, name, command, workingDir, ... } }
   features: {},           // { featureId: { id, workspaceId, name, description, status, priority, sessionIds, ... } }
   worktreeTasks: {},      // { taskId: { id, workspaceId, sessionId, featureId, branch, worktreePath, repoDir, description, baseBranch, status, createdAt, completedAt } }
+  projectDefaults: {},   // { [encodedName]: { defaultDir: string } }
   settings: {
     autoRecover: true,
     notificationLevel: 'all', // 'all' | 'errors' | 'none'
@@ -113,6 +114,8 @@ class Store extends EventEmitter {
         workspaceOrder: parsed.workspaceOrder || [],
         templates: parsed.templates || {},
         features: parsed.features || {},
+        worktreeTasks: parsed.worktreeTasks || {},
+        projectDefaults: parsed.projectDefaults || {},
       };
     } catch (_) {
       return null;
@@ -197,6 +200,20 @@ class Store extends EventEmitter {
   getActiveWorkspace() {
     if (!this._state.activeWorkspace) return null;
     return this.getWorkspace(this._state.activeWorkspace);
+  }
+
+  // ─── Project Defaults ────────────────────────────────────
+
+  getProjectDefaults() {
+    return this._state.projectDefaults || {};
+  }
+
+  setProjectDefault(encodedName, { defaultDir }) {
+    if (!encodedName || typeof encodedName !== 'string') return null;
+    if (!this._state.projectDefaults) this._state.projectDefaults = {};
+    this._state.projectDefaults[encodedName] = { defaultDir: defaultDir || '' };
+    this._debouncedSave();
+    return this._state.projectDefaults[encodedName];
   }
 
   getAllWorkspacesList() {
