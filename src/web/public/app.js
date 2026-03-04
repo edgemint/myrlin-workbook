@@ -9313,6 +9313,13 @@ class CWMApp {
     const name = sessionName || sessionId.substring(0, 12);
     if (sessionIdx === -1) return;
 
+    // Look up workspace name for this session
+    const session = (this.state.allSessions || this.state.sessions || []).find(s => s.id === sessionId);
+    const workspace = session && session.workspaceId
+      ? (this.state.workspaces || []).find(w => w.id === session.workspaceId)
+      : null;
+    const qualifiedName = workspace ? `${workspace.name} -> ${name}` : name;
+
     // In-app notifications (gated by completionNotifications setting)
     if (this.getSetting('completionNotifications') && sessionIdx !== this._activeTerminalSlot) {
       // Flash the pane border green
@@ -9326,20 +9333,20 @@ class CWMApp {
       this._playNotificationSound();
 
       // Show toast
-      this.showToast(`${name} is ready for input`, 'success');
+      this.showToast(`${qualifiedName} is ready for input`, 'success');
 
       // If the pane is in a non-active tab group, highlight the tab
       this._highlightTabGroupForSession(sessionId);
 
       // Flash the browser tab title when the window isn't focused
       // so users know which window needs attention
-      this._flashBrowserTitle(name);
+      this._flashBrowserTitle(qualifiedName);
     }
 
     // OS-level browser notification (independent of in-app notifications)
     if (this.getSetting('browserNotifications') && Notification.permission === 'granted' && sessionIdx !== this._activeTerminalSlot) {
       new Notification('CWM', {
-        body: `${name} is ready for input`,
+        body: `${qualifiedName} is ready for input`,
         icon: '/favicon.ico',
       });
     }
