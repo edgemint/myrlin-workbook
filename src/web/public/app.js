@@ -3485,6 +3485,7 @@ class CWMApp {
       { key: 'defaultModelPlanning', label: 'Default Model (Planning)', description: 'Auto-assign when tasks enter Planning. Haiku is fast/cheap for exploration. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
       { key: 'defaultModelRunning', label: 'Default Model (Running)', description: 'Auto-assign when tasks enter Running. Sonnet balances speed and quality for implementation. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
       { key: 'cfNamedTunnel', label: 'Cloudflare Named Tunnel', description: 'Expose tomnar's workbook on the internet via your own domain. Go to one.dash.cloudflare.com → Networks → Tunnels → Create a tunnel, then copy the token from the install command (the long eyJ… string).', category: 'Remote Access', type: 'tunnel' },
+      { key: 'subscriptionBudget', label: 'Monthly Subscription Budget', description: 'Monthly budget equivalent for Claude Max subscription. Used to compute rolling 5h/7d usage % in the Costs tab. Set to 0 to disable. Stored server-side.', category: 'Costs', type: 'subscription-budget' },
     ];
   }
 
@@ -4027,6 +4028,22 @@ class CWMApp {
                 ${optionsHtml}
               </select>
             </div>`;
+        } else if (item.type === 'subscription-budget') {
+          html += `
+            <div class="settings-row" data-setting-key="${item.key}" style="flex-direction:column;align-items:flex-start;gap:8px;padding:10px 0;">
+              <div class="settings-row-info">
+                <div class="settings-row-label">${this.escapeHtml(item.label)}</div>
+                <div class="settings-row-desc">${this.escapeHtml(item.description)}</div>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <input type="number" id="subscription-budget-input" min="0" max="99999" placeholder="e.g. 200"
+                  style="width:100px;font-size:13px;padding:4px 8px;background:var(--input-bg,#1e1e2e);border:1px solid var(--border,#444);border-radius:4px;color:inherit;" />
+                <button class="sub-budget-preset" data-preset="100" style="font-size:12px;padding:4px 10px;border-radius:4px;border:1px solid var(--border,#555);background:var(--btn-bg,#313244);color:inherit;cursor:pointer;">$100</button>
+                <button class="sub-budget-preset" data-preset="200" style="font-size:12px;padding:4px 10px;border-radius:4px;border:1px solid var(--border,#555);background:var(--btn-bg,#313244);color:inherit;cursor:pointer;">$200</button>
+                <button id="subscription-budget-save" style="font-size:12px;padding:4px 10px;border-radius:4px;border:none;background:#89b4fa;color:#1e1e2e;cursor:pointer;font-weight:600;">Save</button>
+                <span id="subscription-budget-current" style="font-size:12px;color:var(--subtext0);"></span>
+              </div>
+            </div>`;
         } else if (item.type === 'tunnel') {
           html += `
             <div class="settings-row" data-setting-key="${item.key}" style="flex-direction:column;align-items:flex-start;gap:8px;padding:10px 0;">
@@ -4100,6 +4117,53 @@ class CWMApp {
       } catch (_) {}
     };
     if (ntStatus) loadNamedTunnelStatus();
+
+    // ── Subscription budget controls ──────────────────────────
+    const subBudgetInput = document.getElementById('subscription-budget-input');
+    const subBudgetSave = document.getElementById('subscription-budget-save');
+    const subBudgetCurrent = document.getElementById('subscription-budget-current');
+
+    const loadSubBudget = async () => {
+      try {
+        const s = await this.api('GET', '/api/settings');
+        if (subBudgetCurrent) {
+          subBudgetCurrent.textContent = s.subscriptionBudget > 0
+            ? `Current: $${s.subscriptionBudget}/mo`
+            : 'Disabled (0)';
+        }
+        if (subBudgetInput && !subBudgetInput.value) {
+          subBudgetInput.value = s.subscriptionBudget > 0 ? s.subscriptionBudget : '';
+        }
+      } catch (_) {}
+    };
+    if (subBudgetInput) loadSubBudget();
+
+    if (subBudgetSave) {
+      subBudgetSave.addEventListener('click', async () => {
+        const val = parseFloat(subBudgetInput ? subBudgetInput.value : '0') || 0;
+        subBudgetSave.textContent = 'Saving...';
+        subBudgetSave.disabled = true;
+        try {
+          await this.api('PUT', '/api/settings', { subscriptionBudget: val });
+          this._rollingData = null; // Invalidate cached rolling data
+          if (subBudgetCurrent) {
+            subBudgetCurrent.textContent = val > 0 ? `Saved: $${val}/mo` : 'Disabled (0)';
+          }
+          this.showToast(val > 0 ? `Budget set to $${val}/mo` : 'Budget disabled', 'success');
+        } catch (_) {
+          this.showToast('Failed to save budget', 'error');
+        } finally {
+          subBudgetSave.textContent = 'Save';
+          subBudgetSave.disabled = false;
+        }
+      });
+    }
+
+    this.els.settingsBody.querySelectorAll('.sub-budget-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (subBudgetInput) subBudgetInput.value = btn.dataset.preset;
+      });
+    });
 
     if (ntSaveBtn) {
       ntSaveBtn.addEventListener('click', async () => {
@@ -7872,6 +7936,23 @@ class CWMApp {
             </div>
             ${urgency !== 'ok' ? `<div style="color:${urgencyColor};margin-top:3px;font-size:10px">${urgency === 'critical' ? '⚠ Heavy context - consider compacting' : '● Moderate context usage'}</div>` : ''}
           </div>`;
+      }
+
+      // Subscription budget % annotation
+      if (!this._rollingData || (Date.now() - (this._rollingDataTs || 0)) > 60000) {
+        this._rollingData = await this.api('GET', '/api/cost/rolling').catch(() => null);
+        this._rollingDataTs = Date.now();
+      }
+      if (this._rollingData && this._rollingData.budgetMonthly > 0) {
+        const r = this._rollingData;
+        const sessionCost = data.cost.total;
+        const p5h = r.budget5h ? (sessionCost / r.budget5h * 100).toFixed(1) : null;
+        const p7d  = r.budget7d  ? (sessionCost / r.budget7d  * 100).toFixed(1) : null;
+        if (p5h || p7d) {
+          infoHtml += `<div style="font-size:10px;color:var(--subtext0);margin-top:3px">
+            est. API equiv: ${p5h ? p5h + '% of 5h cap' : ''}${p5h && p7d ? ' · ' : ''}${p7d ? p7d + '% of 7d cap' : ''}
+          </div>`;
+        }
       }
 
       if (infoHtml) {
@@ -11719,18 +11800,61 @@ class CWMApp {
     if (!body) return;
 
     try {
-      const data = await this.api('GET', `/api/cost/dashboard?period=${period}`);
-      this.renderCostsDashboard(data);
+      const [data, rolling] = await Promise.all([
+        this.api('GET', `/api/cost/dashboard?period=${period}`),
+        this.api('GET', '/api/cost/rolling').catch(() => null),
+      ]);
+      this.renderCostsDashboard(data, rolling);
     } catch (err) {
       body.innerHTML = `<div class="costs-loading">Failed to load cost data: ${err.message}</div>`;
     }
   }
 
   /**
+   * Render rolling usage gauge section for subscription budget tracking.
+   * @param {object} r - Rolling data from /api/cost/rolling
+   */
+  _renderRollingSection(r) {
+    const fmtCost = (v) => {
+      if (v >= 10) return '$' + v.toFixed(1);
+      if (v >= 1) return '$' + v.toFixed(2);
+      return '$' + v.toFixed(3);
+    };
+
+    if (!r.budgetMonthly || r.budgetMonthly === 0) {
+      return `<div class="rolling-prompt">
+        <strong>Claude Max subscriber?</strong>
+        <a onclick="this.closest('.costs-body,#costs-body')?.dispatchEvent(new CustomEvent('open-budget-settings',{bubbles:true}))">Set your monthly budget</a>
+        in Settings to see rolling usage gauges (est. API equiv.).
+      </div>`;
+    }
+
+    const renderGauge = (label, cost, budget, pct, messages, windowLabel) => {
+      const cappedPct = Math.min(100, pct || 0);
+      const colorClass = cappedPct >= 85 ? 'red' : cappedPct >= 60 ? 'yellow' : 'green';
+      const pctDisplay = pct !== null ? pct.toFixed(1) + '%' : 'n/a';
+      return `<div class="rolling-gauge-card">
+        <div class="rolling-gauge-label">${label} <span style="font-size:10px;font-weight:400;opacity:0.7">(est. API equiv.)</span></div>
+        <div class="rolling-gauge-amounts">${fmtCost(cost)} <span class="rolling-gauge-of">of ~${fmtCost(budget)}</span></div>
+        <div class="rolling-gauge-bar"><div class="rolling-gauge-fill ${colorClass}" style="width:${cappedPct}%"></div></div>
+        <div class="rolling-gauge-sub"><span class="rolling-gauge-pct" style="color:var(--${colorClass})">${pctDisplay}</span> · ${messages} messages in last ${windowLabel}</div>
+      </div>`;
+    };
+
+    return `<div class="rolling-section">
+      <div class="rolling-section-title">Rolling Usage</div>
+      <div class="rolling-gauge-pair">
+        ${renderGauge('5h Window', r.rolling5h.cost, r.budget5h, r.pct5h, r.rolling5h.messages, '5 hours')}
+        ${renderGauge('7-Day Window', r.rolling7d.cost, r.budget7d, r.pct7d, r.rolling7d.messages, '7 days')}
+      </div>
+    </div>`;
+  }
+
+  /**
    * Render the full costs dashboard into the costs body element.
    * @param {object} data - Dashboard data from /api/cost/dashboard
    */
-  renderCostsDashboard(data) {
+  renderCostsDashboard(data, rolling) {
     const body = this.els.costsBody;
     if (!body) return;
 
@@ -11796,6 +11920,11 @@ class CWMApp {
         <div class="costs-card-sub">${fmtTokens(summary.totalTokens.cacheRead || 0)} read hits</div>
       </div>
     </div>`;
+
+    // ── Rolling Usage Gauges (Subscription Budget) ──
+    if (rolling) {
+      html += this._renderRollingSection(rolling);
+    }
 
     // ── Timeline Chart ──
     html += `<div class="costs-chart-section">
