@@ -9244,6 +9244,14 @@ class CWMApp {
     // Flash the browser tab title when the window isn't focused
     // so users know which window needs attention
     this._flashBrowserTitle(name);
+
+    // OS-level browser notification (independent of in-app notifications)
+    if (this.getSetting('browserNotifications') && Notification.permission === 'granted') {
+      new Notification('CWM', {
+        body: `${name} is ready for input`,
+        icon: '/favicon.ico',
+      });
+    }
   }
 
   /**
