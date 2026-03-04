@@ -1936,7 +1936,7 @@ app.get('/api/sessions/:id/cost', requireAuth, (req, res) => {
     }
   }
 
-  // Last resort: try the Myrlin session ID directly (unlikely to match, but try)
+  // Last resort: try the tomnar's workbook session ID directly (unlikely to match, but try)
   if (!jsonlPath && !resumeSessionId) {
     jsonlPath = findJsonlFile(req.params.id);
     resumeSessionId = req.params.id;

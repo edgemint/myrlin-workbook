@@ -1,6 +1,6 @@
 # Quota / Usage Widget -- Archived Code Reference
 
-This document archives all quota/usage widget code that was removed from the Myrlin Workbook GUI.
+This document archives all quota/usage widget code that was removed from the tomnar's workbook GUI.
 It is preserved here so the feature can be re-added later if needed.
 
 The quota widget provided an Anthropic-dashboard-style usage tracker in the sidebar, showing

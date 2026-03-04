@@ -1,4 +1,4 @@
-# Contributing to Myrlin Workbook
+# Contributing to tomnar's workbook
 
 Thanks for wanting to contribute! Here's how to get started.
 

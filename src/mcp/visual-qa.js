@@ -16,7 +16,7 @@
  *   node src/mcp/visual-qa.js                          # Default: localhost:9222
  *   CDP_PORT=9333 node src/mcp/visual-qa.js            # Custom port
  *
- * Part of Myrlin Workbook (claude-workspace-manager).
+ * Part of tomnar's workbook (claude-workspace-manager).
  */
 
 const readline = require('readline');

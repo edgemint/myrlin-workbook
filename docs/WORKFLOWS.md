@@ -1,6 +1,6 @@
-# Myrlin Workbook - Workflows Guide
+# tomnar's workbook - Workflows Guide
 
-A practical guide to using Myrlin Workbook's features, from basic workspace management to advanced autonomous task workflows.
+A practical guide to using tomnar's workbook's features, from basic workspace management to advanced autonomous task workflows.
 
 ---
 
@@ -235,7 +235,7 @@ When creating a new session, template chips appear above the form. Click one to 
 
 ## Cost Tracking
 
-Myrlin tracks token usage and estimated costs for Claude sessions.
+tomnar's workbook tracks token usage and estimated costs for Claude sessions.
 
 ### How It Works
 

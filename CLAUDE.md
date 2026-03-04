@@ -51,7 +51,7 @@ This project has agent teams enabled. Use teammates for:
    - API contracts, data shapes, shared types
    - What the feature should do (requirements)
    - What it should NOT touch (constraints)
-4. **Mark the session** in TODO.md or the Myrlin Workbook UI with:
+4. **Mark the session** in TODO.md or the tomnar's workbook UI with:
    - What the session was created for (feature name)
    - When it was created (ISO timestamp)
    - Status (in-progress / completed / failed)

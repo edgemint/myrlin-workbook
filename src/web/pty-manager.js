@@ -190,7 +190,7 @@ class PtySessionManager {
     // Inject workspace documentation env vars so AI sessions can read/write docs
     const sessionEnv = { ...process.env };
     // Remove CLAUDECODE env var to prevent "nested session" detection error
-    // when Myrlin itself runs inside a Claude Code session
+    // when tomnar's workbook itself runs inside a Claude Code session
     delete sessionEnv.CLAUDECODE;
     try {
       const store = getStore();

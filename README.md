@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="docs/images/logo-animated.svg" alt="Myrlin's Workbook" width="250">
+  <img src="docs/images/logo-animated.svg" alt="tomnar's workbook" width="250">
 </p>
-<h1 align="center">Myrlin's Workbook</h1>
+<h1 align="center">tomnar's workbook</h1>
 <p align="center">
   <a href="https://www.npmjs.com/package/myrlin-workbook"><img src="https://img.shields.io/npm/v/myrlin-workbook.svg?style=flat-square" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/myrlin-workbook"><img src="https://img.shields.io/npm/dm/myrlin-workbook.svg?style=flat-square" alt="npm downloads"></a>
@@ -80,13 +80,13 @@ Password lookup order: `CWM_PASSWORD` env var > `~/.myrlin/config.json` > `./sta
 
 I use Claude Code daily and had a growing list of pet peeves. Can't name sessions, so `/resume` is just picking from a list of IDs. No shift+enter for multiline. If you have a few sessions going at once, the terminal window juggling gets old fast. PC restarts and you have to reopen everything from scratch. No idea what you're spending.
 
-Got fed up and built something for it. Myrlin scans `~/.claude/projects/`, finds every session you've ever run, and you organize them into projects with embedded terminals, docs, and cost tracking. Everything runs locally, no cloud, no telemetry.
+Got fed up and built something for it. tomnar's workbook scans `~/.claude/projects/`, finds every session you've ever run, and you organize them into projects with embedded terminals, docs, and cost tracking. Everything runs locally, no cloud, no telemetry.
 
 ### Compared to other tools
 
-There are good tools in this space. I tried them. Here's where Myrlin fits:
+There are good tools in this space. I tried them. Here's where tomnar's workbook fits:
 
-| Feature | Myrlin | [ClaudeCodeUI](https://github.com/siteboon/claudecodeui) | [Opcode](https://github.com/winfunc/opcode) | [Claude Squad](https://github.com/smtg-ai/claude-squad) |
+| Feature | tomnar's workbook | [ClaudeCodeUI](https://github.com/siteboon/claudecodeui) | [Opcode](https://github.com/winfunc/opcode) | [Claude Squad](https://github.com/smtg-ai/claude-squad) |
 |---------|--------|-------------|--------|-------------|
 | Cost tracking | Yes | No | Yes | No |
 | Costs dashboard | Yes | No | Yes | No |
@@ -108,7 +108,7 @@ There are good tools in this space. I tried them. Here's where Myrlin fits:
 | npx install | Yes | Yes | No | No |
 | Build step required | None | Vite | Tauri | None |
 
-**What those tools do better:** ClaudeCodeUI has a file explorer and multi-agent support. Opcode is a polished desktop app with 20k stars. Claude Squad supports 5+ AI tools. Myrlin is project-first with cost tracking and per-project docs. Different approach to the same problem.
+**What those tools do better:** ClaudeCodeUI has a file explorer and multi-agent support. Opcode is a polished desktop app with 20k stars. Claude Squad supports 5+ AI tools. tomnar's workbook is project-first with cost tracking and per-project docs. Different approach to the same problem.
 
 ---
 
@@ -129,11 +129,11 @@ Per-session and per-workspace cost breakdown. Parses Claude's JSONL usage data, 
 
 ![Project dashboard with sessions grouped by focus](docs/images/hero-dashboard.png)
 
-Myrlin uses a 3-level organizational hierarchy:
+tomnar's workbook uses a 3-level organizational hierarchy:
 
 ```
 Category ("Side Projects", "Work")     -- optional top-level grouping
-  Project ("Myrlin Workbook")          -- the codebase / main container
+  Project ("tomnar's workbook")        -- the codebase / main container
     Focus ("UI Polish", "Backend")     -- sub-groups within a project
       Sessions                         -- Claude Code conversations
 ```
@@ -220,7 +220,7 @@ Real-time warnings when two or more running sessions are editing the same files.
 
 ## Full Feature List
 
-A comprehensive list of everything Myrlin Workbook offers today.
+A comprehensive list of everything tomnar's workbook offers today.
 
 ### Core
 
@@ -425,7 +425,7 @@ Same issue. node-pty is compiling. If it fails, install the C++ build tools firs
 
 **The killer feature.** Right-click any running Claude session, select "Spinoff Tasks..." and AI extracts actionable tasks from the conversation. Each task gets a pre-filled creation form with context, relevant files, and acceptance criteria. Confirm, and each task spins off to its own worktree branch with a structured context handoff document -- not a raw conversation dump, but a spec (current state, desired state, file inventory, constraints). Tasks appear on the kanban board, run in parallel on isolated branches, and report back with PRs when done.
 
-No other tool extracts tasks from a running session's conversation. Cursor spawns agents from issues. Copilot Workspace goes issue-to-PR. Devin works sequentially. Myrlin is the first to let you take an in-progress conversation, break it into parallel autonomous tasks, and orchestrate them from a kanban board -- all with proper context engineering so each agent knows exactly what to build without the parent's full history polluting its context window.
+No other tool extracts tasks from a running session's conversation. Cursor spawns agents from issues. Copilot Workspace goes issue-to-PR. Devin works sequentially. tomnar's workbook is the first to let you take an in-progress conversation, break it into parallel autonomous tasks, and orchestrate them from a kanban board -- all with proper context engineering so each agent knows exactly what to build without the parent's full history polluting its context window.
 
 ### Coming Soon
 

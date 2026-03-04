@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# restart-gui.sh — Kill the running Myrlin GUI, wait, relaunch.
+# restart-gui.sh — Kill the running tomnar's workbook GUI, wait, relaunch.
 # Works on Windows (MINGW/Git Bash) and Unix.
 
 set -e
@@ -46,7 +46,7 @@ else
   fi
 fi
 
-echo "[restart] Launching Myrlin GUI..."
+echo "[restart] Launching tomnar's workbook GUI..."
 cd "$PROJECT_DIR"
 node src/supervisor.js &
 CHILD_PID=$!
@@ -56,7 +56,7 @@ sleep 2
 
 # Check if it's actually running
 if kill -0 "$CHILD_PID" 2>/dev/null; then
-  echo "[restart] Myrlin GUI running (PID $CHILD_PID) on http://localhost:$PORT"
+  echo "[restart] tomnar's workbook GUI running (PID $CHILD_PID) on http://localhost:$PORT"
   echo "[restart] Refresh your browser to pick up changes."
 else
   echo "[restart] ERROR: Process exited immediately. Check logs above."
