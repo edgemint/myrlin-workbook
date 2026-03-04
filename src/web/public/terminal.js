@@ -385,6 +385,11 @@ class TerminalPane {
         return true;
       });
 
+      // Bubble terminal title changes (OSC 2 sequences set by Claude Code)
+      this.term.onTitleChange((title) => {
+        this.onTitleChange?.(title, this.sessionId);
+      });
+
       // ── Mobile autocorrect guard ─────────────────────────────
       // xterm.js does not handle beforeinput with insertReplacementText
       // (tap-to-correct on Gboard, iOS keyboard, etc.).  We intercept it
