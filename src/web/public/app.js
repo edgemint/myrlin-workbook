@@ -4171,8 +4171,23 @@ class CWMApp {
 
     // Bind toggle change events
     this.els.settingsBody.querySelectorAll('input[data-setting]').forEach(input => {
-      input.addEventListener('change', (e) => {
+      input.addEventListener('change', async (e) => {
         const key = e.target.dataset.setting;
+
+        if (key === 'browserNotifications' && e.target.checked) {
+          if (!('Notification' in window)) {
+            e.target.checked = false;
+            this.showToast('Browser notifications are not supported in this browser.', 'error');
+            return;
+          }
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
+            e.target.checked = false;
+            this.showToast('Browser notification permission was denied. Enable it in your browser settings.', 'error');
+            return;
+          }
+        }
+
         this.state.settings[key] = e.target.checked;
         this.saveSettings();
         this.applySettings();
