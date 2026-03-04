@@ -4057,7 +4057,7 @@ app.put('/api/project-defaults/:encodedName', requireAuth, (req, res) => {
  */
 app.get('/api/session-names', requireAuth, (req, res) => {
   const store = getStore();
-  res.json(store.getAllSessionNames());
+  res.json({ names: store.getAllSessionNames(), sources: store.getAllSessionNameSources() });
 });
 
 /**
@@ -4067,17 +4067,20 @@ app.get('/api/session-names', requireAuth, (req, res) => {
  */
 app.put('/api/session-names/:claudeId', requireAuth, (req, res) => {
   const claudeId = (req.params.claudeId || '').trim(); // normalise once before validation
-  const { name } = req.body || {};
+  const { name, source = 'manual' } = req.body || {};
   if (!claudeId || claudeId.length > 128) {
     return res.status(400).json({ error: 'claudeId must be a non-empty string ≤128 chars.' });
   }
   if (!name || typeof name !== 'string' || name.trim() === '' || name.length > 200) {
     return res.status(400).json({ error: 'name must be a non-empty string ≤200 chars.' });
   }
+  if (source !== 'manual' && source !== 'auto') {
+    return res.status(400).json({ error: "source must be 'manual' or 'auto'." });
+  }
   const store = getStore();
-  const result = store.setSessionName(claudeId, name.trim());
-  if (!result) return res.status(400).json({ error: 'Failed to set session name.' });
-  res.json({ claudeId: result.claudeUUID, name: result.name });
+  const result = store.setSessionName(claudeId, name.trim(), source);
+  if (!result) return res.status(409).json({ error: 'Manual name already set; auto-assignment skipped.' });
+  res.json({ claudeId: result.claudeUUID, name: result.name, source: result.source });
 });
 
 // ──────────────────────────────────────────────────────────
