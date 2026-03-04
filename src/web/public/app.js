@@ -1716,6 +1716,15 @@ class CWMApp {
       let projLPTimer = null;
 
       projList.addEventListener('click', (e) => {
+        const newSessionBtn = e.target.closest('.project-new-session-btn');
+        if (newSessionBtn) {
+          e.stopPropagation();
+          const encoded = newSessionBtn.dataset.encoded;
+          const projectName = newSessionBtn.dataset.name || encoded;
+          const defaultDir = (this.state.projectDefaults[encoded] || {}).defaultDir || '';
+          this.createSession({ name: projectName, workingDir: defaultDir });
+          return;
+        }
         const header = e.target.closest('.project-accordion-header');
         if (header) {
           if (e.target.closest('.project-session-item')) return;
@@ -8263,6 +8272,7 @@ class CWMApp {
           <span class="project-name" title="${this.escapeHtml(p.realPath || '')}">${this.escapeHtml(name)}</span>
           <span class="project-session-count">${sessions.length}</span>
           ${sizeStr ? `<span class="project-size">${sizeStr}</span>` : ''}
+          <button class="project-new-session-btn" data-encoded="${this.escapeHtml(encoded)}" data-path="${this.escapeHtml(p.realPath || '')}" data-name="${this.escapeHtml(name)}" title="New session in this project" tabindex="-1">&#43;</button>
         </div>
         <div class="project-accordion-body" hidden>
           ${sessionItems || '<div style="padding: 6px 12px 6px 28px; font-size: 11px; color: var(--overlay0);">No sessions</div>'}

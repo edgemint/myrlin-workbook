@@ -3719,6 +3719,28 @@ textarea.input {
   display: inline-block; width: 12px; text-align: center;
 }
 .project-accordion-chevron.open { transform: rotate(90deg); }
+
+/* Per-project new session button */
+.project-new-session-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.project-accordion-header:hover .project-new-session-btn {
+  display: block;
+}
+.project-new-session-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface1);
+}
+
 .project-accordion-body { padding: 0 0 4px 0; }
 
 /* Session sub-items inside projects */
