@@ -4061,16 +4061,16 @@ app.get('/api/session-names', requireAuth, (req, res) => {
  * Persists a display name for the given Claude session UUID.
  */
 app.put('/api/session-names/:claudeId', requireAuth, (req, res) => {
-  const { claudeId } = req.params;
+  const claudeId = (req.params.claudeId || '').trim(); // normalise once before validation
   const { name } = req.body || {};
-  if (!claudeId || typeof claudeId !== 'string' || claudeId.trim() === '' || claudeId.length > 128) {
+  if (!claudeId || claudeId.length > 128) {
     return res.status(400).json({ error: 'claudeId must be a non-empty string ≤128 chars.' });
   }
   if (!name || typeof name !== 'string' || name.trim() === '' || name.length > 200) {
     return res.status(400).json({ error: 'name must be a non-empty string ≤200 chars.' });
   }
   const store = getStore();
-  const result = store.setSessionName(claudeId.trim(), name.trim());
+  const result = store.setSessionName(claudeId, name.trim());
   if (!result) return res.status(400).json({ error: 'Failed to set session name.' });
   res.json({ claudeId: result.claudeUUID, name: result.name });
 });
