@@ -2872,6 +2872,23 @@ class CWMApp {
       },
     });
 
+    items.push({
+      label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
+        const emptySlot = this.terminalPanes.findIndex(p => p === null);
+        if (emptySlot === -1) {
+          this.showToast('All terminal panes full. Close one first.', 'warning');
+          return;
+        }
+        this.setViewMode('terminal');
+        this.openTerminalInPane(emptySlot, sessionName, sessionName, {
+          cwd: projectPath,
+          resumeSessionId: sessionName,
+          command: 'claude',
+          bypassPermissions: true,
+        });
+      },
+    });
+
     // Add to active workspace (without opening terminal)
     items.push({
       label: 'Add to Project', icon: '&#43;', action: () => {
