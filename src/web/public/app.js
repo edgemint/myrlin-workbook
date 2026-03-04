@@ -8627,6 +8627,11 @@ class CWMApp {
             try {
               const ps = JSON.parse(projSessJson);
               const claudeSessionId = ps.sessionName; // This IS the Claude session UUID
+              // If already open anywhere, redirect focus instead of spawning duplicate
+              if (this.focusPaneBySessionId(claudeSessionId)) {
+                this.showToast('Session already open — focused existing pane', 'info');
+                return;
+              }
               console.log('[DnD] Project-session drop - resumeSessionId:', claudeSessionId, 'cwd:', ps.projectPath);
               // Open terminal directly - use the Claude session UUID as the PTY session ID
               // so the PTY manager can reuse it on subsequent drops
