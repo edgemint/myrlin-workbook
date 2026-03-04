@@ -120,6 +120,7 @@ class CWMApp {
       showHidden: false,
       resourceData: null,
       gitStatusCache: {},
+      sessionNames: {},
       settings: Object.assign({
         paneColorHighlights: true,
         activityIndicators: true,
@@ -2003,6 +2004,7 @@ class CWMApp {
       this.loadGroups(),
       this.loadProjects(),
       this.loadProjectDefaults(),
+      this.loadSessionNames(),
     ]);
 
     // Restore active workspace from localStorage if still valid
@@ -2018,6 +2020,19 @@ class CWMApp {
 
     // Apply settings (CSS classes, visibility) after initial data is loaded
     this.applySettings();
+  }
+
+  /**
+   * Load the server-persisted claudeUUID→name map into this.state.sessionNames.
+   * Falls back to empty object on any error.
+   */
+  async loadSessionNames() {
+    try {
+      const data = await this.api('GET', '/api/session-names');
+      this.state.sessionNames = (data && typeof data === 'object') ? data : {};
+    } catch (_) {
+      this.state.sessionNames = {};
+    }
   }
 
   async loadWorkspaces() {
