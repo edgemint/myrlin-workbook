@@ -212,7 +212,7 @@ class Store extends EventEmitter {
     if (!encodedName || typeof encodedName !== 'string') return null;
     if (!this._state.projectDefaults) this._state.projectDefaults = {};
     this._state.projectDefaults[encodedName] = { defaultDir: defaultDir || '' };
-    this._debouncedSave();
+    this.save();
     return this._state.projectDefaults[encodedName];
   }
 
