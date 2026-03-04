@@ -2500,7 +2500,7 @@ class CWMApp {
       const updated = data.session || data;
       // Sync title to project sessions if this session links to a Claude UUID
       const claudeId = (updated && updated.resumeSessionId) || (session && session.resumeSessionId);
-      if (claudeId && result.name) this.syncSessionTitle(claudeId, result.name);
+      if (claudeId && result.name) await this.syncSessionTitle(claudeId, result.name);
       this.showToast('Session updated', 'success');
       await this.loadSessions();
       this.renderProjects();
@@ -3335,7 +3335,7 @@ class CWMApp {
       if (data && data.title) {
         // Sync title to project sessions via Claude UUID
         const claudeId = data.claudeSessionId || (this.state.sessions.find(s => s.id === sessionId) || {}).resumeSessionId;
-        if (claudeId) this.syncSessionTitle(claudeId, data.title);
+        if (claudeId) await this.syncSessionTitle(claudeId, data.title);
         this.showToast(`Titled: "${data.title}"`, 'success');
         await this.loadSessions();
         this.renderWorkspaces();
@@ -3370,7 +3370,7 @@ class CWMApp {
       const data = await this.api('POST', `/api/sessions/${claudeSessionId}/auto-title`, { claudeSessionId });
       if (data && data.title) {
         // Sync title across project sessions AND any linked workspace sessions
-        this.syncSessionTitle(claudeSessionId, data.title);
+        await this.syncSessionTitle(claudeSessionId, data.title);
         this.showToast(`Titled: "${data.title}"`, 'success');
         this.renderProjects();
         this.renderWorkspaces();
