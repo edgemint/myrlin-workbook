@@ -9217,33 +9217,31 @@ class CWMApp {
    * when they're already looking at the terminal that finished.
    */
   onTerminalIdle({ sessionId, sessionName }) {
-    // Respect completion notifications setting
-    if (!this.getSetting('completionNotifications')) return;
-
-    // Don't notify for the currently focused/active pane
-    const activeIdx = this.terminalPanes.findIndex(tp => tp && tp.sessionId === sessionId);
-    if (activeIdx === this._activeTerminalSlot) return;
-
-    // Flash the pane border green
-    const paneEls = document.querySelectorAll('.terminal-pane');
-    if (paneEls[activeIdx]) {
-      paneEls[activeIdx].classList.add('terminal-pane-done');
-      setTimeout(() => paneEls[activeIdx].classList.remove('terminal-pane-done'), 4000);
-    }
-
-    // Play a subtle notification sound using Web Audio API
-    this._playNotificationSound();
-
-    // Show toast
+    const sessionIdx = this.terminalPanes.findIndex(tp => tp && tp.sessionId === sessionId);
     const name = sessionName || sessionId.substring(0, 12);
-    this.showToast(`${name} is ready for input`, 'success');
 
-    // If the pane is in a non-active tab group, highlight the tab
-    this._highlightTabGroupForSession(sessionId);
+    // In-app notifications (gated by completionNotifications setting)
+    if (this.getSetting('completionNotifications') && sessionIdx !== this._activeTerminalSlot) {
+      // Flash the pane border green
+      const paneEls = document.querySelectorAll('.terminal-pane');
+      if (paneEls[sessionIdx]) {
+        paneEls[sessionIdx].classList.add('terminal-pane-done');
+        setTimeout(() => paneEls[sessionIdx].classList.remove('terminal-pane-done'), 4000);
+      }
 
-    // Flash the browser tab title when the window isn't focused
-    // so users know which window needs attention
-    this._flashBrowserTitle(name);
+      // Play a subtle notification sound using Web Audio API
+      this._playNotificationSound();
+
+      // Show toast
+      this.showToast(`${name} is ready for input`, 'success');
+
+      // If the pane is in a non-active tab group, highlight the tab
+      this._highlightTabGroupForSession(sessionId);
+
+      // Flash the browser tab title when the window isn't focused
+      // so users know which window needs attention
+      this._flashBrowserTitle(name);
+    }
 
     // OS-level browser notification (independent of in-app notifications)
     if (this.getSetting('browserNotifications') && Notification.permission === 'granted') {
