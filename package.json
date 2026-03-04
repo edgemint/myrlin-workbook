@@ -17,6 +17,7 @@
     "gui:demo": "node src/supervisor.js --demo",
     "test": "node test/run.js",
     "mcp:visual-qa": "node src/mcp/visual-qa.js",
+    "gui:app": "node src/supervisor.js --app",
     "gui:cdp": "node src/supervisor.js --cdp",
     "postinstall": "node scripts/postinstall.js",
     "restart": "bash scripts/restart-gui.sh"

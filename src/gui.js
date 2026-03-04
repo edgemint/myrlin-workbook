@@ -127,6 +127,41 @@ function openBrowser(url, callback) {
 }
 
 /**
+ * Launch a browser in app mode (no address bar, no tabs) — feels like a native desktop app.
+ * Tries Chrome first, then Edge (Windows) / Chromium (Linux), then falls back to default browser.
+ * @param {string} url - The URL to open
+ */
+function openBrowserAppMode(url) {
+  const { exec } = require('child_process');
+  const platform = process.platform;
+
+  const attempts = [];
+  if (platform === 'win32') {
+    attempts.push(`start "" chrome --app="${url}"`);
+    attempts.push(`start "" msedge --app="${url}"`);
+  } else if (platform === 'darwin') {
+    attempts.push(`open -a "Google Chrome" --args --app="${url}"`);
+    attempts.push(`open -a "Chromium" --args --app="${url}"`);
+  } else {
+    attempts.push(`google-chrome --app="${url}"`);
+    attempts.push(`chromium-browser --app="${url}"`);
+    attempts.push(`chromium --app="${url}"`);
+  }
+
+  function tryNext(index) {
+    if (index >= attempts.length) {
+      console.log(`Could not launch browser in app mode. Falling back to default browser.`);
+      openBrowser(url);
+      return;
+    }
+    exec(attempts[index], (err) => {
+      if (err) tryNext(index + 1);
+    });
+  }
+  tryNext(0);
+}
+
+/**
  * Launch a specific browser with CDP remote debugging enabled, cross-platform.
  * Tries Chrome first, then Edge (Windows) / Chromium (Linux), then falls back to default browser.
  * @param {string} url - The URL to open
@@ -166,6 +201,7 @@ function openBrowserWithCDP(url, cdpPort) {
 
 if (!process.env.CWM_NO_OPEN) {
   const cdpEnabled = process.argv.includes('--cdp');
+  const appMode = process.argv.includes('--app');
   const cdpPort = parseInt(process.env.CDP_PORT, 10) || 9222;
   const url = `http://localhost:${port}`;
 
@@ -173,6 +209,8 @@ if (!process.env.CWM_NO_OPEN) {
     openBrowserWithCDP(url, cdpPort);
     console.log(`CDP remote debugging enabled on port ${cdpPort}`);
     console.log(`Visual QA MCP can connect at localhost:${cdpPort}`);
+  } else if (appMode) {
+    openBrowserAppMode(url);
   } else {
     openBrowser(url);
   }
