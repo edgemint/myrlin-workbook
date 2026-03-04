@@ -3475,6 +3475,7 @@ class CWMApp {
       { key: 'activityIndicators', label: 'Activity Indicators', description: 'Show real-time activity labels (Reading, Writing, etc.) on pane headers', category: 'Terminal' },
       { key: 'autoOpenTerminal', label: 'Auto-open Terminal on Start', description: 'Automatically open a terminal when starting a session', category: 'Terminal' },
       { key: 'completionNotifications', label: 'Completion Notifications', description: 'Sound and toast when a background terminal finishes', category: 'Notifications' },
+      { key: 'browserNotifications', label: 'Browser Notifications', description: 'OS desktop notification when any terminal finishes (requires browser permission)', category: 'Notifications' },
       { key: 'sessionCountInHeader', label: 'Session Count in Header', description: 'Show running/total session stats in the header bar', category: 'Interface' },
       { key: 'confirmBeforeClose', label: 'Confirm Before Close', description: 'Ask for confirmation before closing terminal panes', category: 'Interface' },
       { key: 'uiScale', label: 'UI Scale', description: 'Adjust the overall interface size', category: 'Interface', type: 'scale' },
