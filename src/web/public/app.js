@@ -3551,7 +3551,7 @@ class CWMApp {
       { key: 'maxConcurrentTasks', label: 'Max Concurrent Tasks', description: 'Maximum number of worktree tasks that can run simultaneously (1-8)', category: 'Advanced', type: 'number', min: 1, max: 8 },
       { key: 'defaultModelPlanning', label: 'Default Model (Planning)', description: 'Auto-assign when tasks enter Planning. Haiku is fast/cheap for exploration. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
       { key: 'defaultModelRunning', label: 'Default Model (Running)', description: 'Auto-assign when tasks enter Running. Sonnet balances speed and quality for implementation. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
-      { key: 'cfNamedTunnel', label: 'Cloudflare Named Tunnel', description: 'Expose tomnar's workbook on the internet via your own domain. Go to one.dash.cloudflare.com → Networks → Tunnels → Create a tunnel, then copy the token from the install command (the long eyJ… string).', category: 'Remote Access', type: 'tunnel' },
+      { key: 'cfNamedTunnel', label: 'Cloudflare Named Tunnel', description: 'Expose tomnar\'s workbook on the internet via your own domain. Go to one.dash.cloudflare.com → Networks → Tunnels → Create a tunnel, then copy the token from the install command (the long eyJ… string).', category: 'Remote Access', type: 'tunnel' },
       { key: 'subscriptionBudget', label: 'Monthly Subscription Budget', description: 'Monthly budget equivalent for Claude Max subscription. Used to compute rolling 5h/7d usage % in the Costs tab. Set to 0 to disable. Stored server-side.', category: 'Costs', type: 'subscription-budget' },
     ];
   }
@@ -10551,10 +10551,10 @@ class CWMApp {
             if (as && as !== s) as.name = newName;
             // Sync to project sessions via Claude UUID
             const claudeId = (s && s.resumeSessionId) || (as && as.resumeSessionId);
-            if (claudeId) this.syncSessionTitle(claudeId, newName);
+            if (claudeId) await this.syncSessionTitle(claudeId, newName);
           } else {
             // Project session - sync everywhere (localStorage + any linked workspace sessions)
-            this.syncSessionTitle(sessionId, newName);
+            await this.syncSessionTitle(sessionId, newName);
           }
           // Sync terminal pane titles if this session is open in a terminal
           for (let i = 0; i < this.terminalPanes.length; i++) {
@@ -10635,10 +10635,10 @@ class CWMApp {
             if (as && as !== s) as.name = newName;
             // Sync globally via Claude UUID
             const claudeId = (s && s.resumeSessionId) || (as && as.resumeSessionId);
-            if (claudeId) this.syncSessionTitle(claudeId, newName);
+            if (claudeId) await this.syncSessionTitle(claudeId, newName);
           } else {
             // Project session - sessionId IS the Claude UUID
-            this.syncSessionTitle(sessionId, newName);
+            await this.syncSessionTitle(sessionId, newName);
           }
 
           // Update TerminalPane instance
