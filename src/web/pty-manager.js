@@ -390,64 +390,94 @@ class PtySessionManager {
 
     console.log(`[PTY] Spawned session ${sessionId} (PID: ${ptyProcess.pid}) cmd: "${fullCommand}" cwd: "${cwd || process.cwd()}"`);
 
-    // ── Async: detect Claude session UUID from newest JSONL after spawn ──
-    // Claude Code creates a JSONL file in ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl.
-    // After a short delay, scan for the newest file and backfill resumeSessionId
-    // so future restarts use the precise --resume <uuid> instead of --continue.
-    if (resolvedCwd && !resumeSessionId) {
-      setTimeout(() => {
+    // ── Detect and track Claude session UUID ──
+    // Claude creates ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl on first prompt.
+    // After /clear it creates a NEW .jsonl — we poll every 30s to pick up the change.
+    if (resolvedCwd) {
+      let trackedUUID = resumeSessionId || null;
+      let trackedMtime = 0;
+
+      // Helper: find the project dir and return newest JSONL info
+      function findNewestJsonl() {
         try {
           const claudeDir = path.join(os.homedir(), '.claude', 'projects');
-          if (!fs.existsSync(claudeDir)) return;
+          if (!fs.existsSync(claudeDir)) return null;
 
-          // Claude encodes the cwd path as a directory name under ~/.claude/projects/
-          // Try multiple encoding patterns: URL-encoded, slash-replaced
           const candidates = fs.readdirSync(claudeDir).filter(d => {
             try {
               const decoded = decodeURIComponent(d);
               const normalizedDecoded = decoded.replace(/[/\\]/g, path.sep);
               const normalizedCwd = resolvedCwd.replace(/[/\\]/g, path.sep);
               return normalizedDecoded === normalizedCwd;
-            } catch (_) {
-              return false;
-            }
+            } catch (_) { return false; }
           });
 
-          if (candidates.length === 0) return;
+          if (candidates.length === 0) return null;
 
           const projDir = path.join(claudeDir, candidates[0]);
           const jsonls = fs.readdirSync(projDir)
             .filter(f => f.endsWith('.jsonl'))
             .map(f => {
               try {
-                return { name: f, mtime: fs.statSync(path.join(projDir, f)).mtimeMs };
-              } catch (_) {
-                return null;
-              }
+                const fp = path.join(projDir, f);
+                return { uuid: f.replace('.jsonl', ''), mtime: fs.statSync(fp).mtimeMs };
+              } catch (_) { return null; }
             })
             .filter(Boolean)
             .sort((a, b) => b.mtime - a.mtime);
 
-          if (jsonls.length === 0) return;
+          return jsonls[0] || null;
+        } catch (_) { return null; }
+      }
 
-          const uuid = jsonls[0].name.replace('.jsonl', '');
-          console.log(`[PTY] Detected Claude session UUID for ${sessionId}: ${uuid}`);
+      // Apply a newly detected UUID — update store + carry name forward
+      function applyDetectedUUID(newUUID, newMtime) {
+        if (newUUID === trackedUUID) return; // No change
+        const oldUUID = trackedUUID;
+        trackedUUID = newUUID;
+        trackedMtime = newMtime;
 
-          // Save to store so future restarts use --resume <uuid>
-          try {
-            const store = getStore();
-            if (store.getSession(sessionId)) {
-              store.updateSession(sessionId, { resumeSessionId: uuid });
-              console.log(`[PTY] Backfilled resumeSessionId=${uuid} for session ${sessionId}`);
+        console.log(`[PTY] New Claude session UUID for ${sessionId}: ${newUUID}${oldUUID ? ' (was ' + oldUUID + ')' : ''}`);
+
+        try {
+          const store = getStore();
+          if (store.getSession(sessionId)) {
+            store.updateSession(sessionId, { resumeSessionId: newUUID });
+          }
+          // Carry the display name forward to the new UUID
+          if (oldUUID) {
+            const existingName = store.getSessionName(oldUUID);
+            if (existingName) {
+              store.setSessionName(newUUID, existingName);
+              console.log(`[PTY] Carried session name "${existingName}" to new UUID ${newUUID}`);
             }
-          } catch (_) {}
+          }
+        } catch (_) {}
 
-          // Also store on the session object for layout saves
-          session.detectedResumeId = uuid;
-        } catch (err) {
-          console.log(`[PTY] UUID detection failed for ${sessionId}: ${err.message}`);
+        session.detectedResumeId = newUUID;
+      }
+
+      // Initial detection after 8s (Claude needs time to create the JSONL file)
+      const initTimer = setTimeout(() => {
+        const newest = findNewestJsonl();
+        if (newest) applyDetectedUUID(newest.uuid, newest.mtime);
+      }, 8000);
+
+      // Polling interval: pick up /clear-generated UUIDs while the session runs
+      const pollInterval = setInterval(() => {
+        const newest = findNewestJsonl();
+        if (newest && newest.mtime > trackedMtime) {
+          applyDetectedUUID(newest.uuid, newest.mtime);
         }
-      }, 8000); // Wait 8s for Claude to create the JSONL file
+      }, 30000); // every 30s
+
+      // Clean up timers when the session is destroyed
+      const origDestroy = session.destroy ? session.destroy.bind(session) : null;
+      session.destroy = () => {
+        clearTimeout(initTimer);
+        clearInterval(pollInterval);
+        if (origDestroy) origDestroy();
+      };
     }
 
     return session;
