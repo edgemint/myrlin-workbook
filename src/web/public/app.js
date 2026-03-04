@@ -4274,9 +4274,10 @@ class CWMApp {
               </div>
               <div style="display:flex;align-items:center;gap:8px;">
                 <span id="require-auth-status" style="font-size:11px;color:var(--subtext0);">loading…</span>
-                <label class="toggle-switch" style="cursor:pointer;" title="Toggle password requirement">
-                  <input type="checkbox" id="require-auth-toggle" style="position:absolute;opacity:0;width:0;height:0;" />
-                  <span class="toggle-track"></span>
+                <label class="settings-toggle" title="Toggle password requirement">
+                  <input type="checkbox" id="require-auth-toggle" />
+                  <span class="settings-toggle-track"></span>
+                  <span class="settings-toggle-thumb"></span>
                 </label>
               </div>
             </div>
