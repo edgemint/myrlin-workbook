@@ -2630,6 +2630,7 @@ class CWMApp {
       items.push(
         { label: 'Stop', icon: '&#9632;', action: () => this.stopSession(sessionId) },
         { label: 'Restart', icon: '&#8635;', action: () => this.restartSession(sessionId) },
+        { label: 'Restart (Bypass)', icon: '&#9888;', action: () => this.restartSessionWithFlags(sessionId, { bypassPermissions: true }) },
       );
     }
 
@@ -2717,6 +2718,7 @@ class CWMApp {
     // Advanced submenu — templates, context, refocus, worktrees
     const advancedItems = [
       { label: 'Start with Context', action: () => this.startSessionWithContext(sessionId) },
+      { label: 'Start with Context (Bypass)', action: () => this.startSessionWithContext(sessionId, { bypassPermissions: true }) },
       { label: 'Save as Template', action: () => this.saveSessionAsTemplate(session) },
       { label: 'Reset & Refocus', action: () => this.refocusSession(sessionId, 'reset') },
       { label: 'Compact & Refocus', action: () => this.refocusSession(sessionId, 'compact') },
@@ -2777,6 +2779,26 @@ class CWMApp {
           if (session.workingDir) spawnOpts.cwd = session.workingDir;
           if (session.command) spawnOpts.command = session.command;
           if (session.bypassPermissions) spawnOpts.bypassPermissions = true;
+          if (session.verbose) spawnOpts.verbose = true;
+          if (session.model) spawnOpts.model = session.model;
+          if (session.agentTeams) spawnOpts.agentTeams = true;
+          this.openTerminalInPane(emptySlot, sessionId, session.name, spawnOpts);
+        } else {
+          this.showToast('All terminal panes full. Close one first.', 'warning');
+        }
+      },
+    });
+
+    items.push({
+      label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
+        const emptySlot = this.terminalPanes.findIndex(p => p === null);
+        if (emptySlot !== -1) {
+          this.setViewMode('terminal');
+          const spawnOpts = {};
+          if (session.resumeSessionId) spawnOpts.resumeSessionId = session.resumeSessionId;
+          if (session.workingDir) spawnOpts.cwd = session.workingDir;
+          if (session.command) spawnOpts.command = session.command;
+          spawnOpts.bypassPermissions = true;
           if (session.verbose) spawnOpts.verbose = true;
           if (session.model) spawnOpts.model = session.model;
           if (session.agentTeams) spawnOpts.agentTeams = true;
@@ -5630,7 +5652,7 @@ class CWMApp {
    * Creates a new session in the same workspace/directory, then sends an
    * initial orientation prompt when the terminal connects.
    */
-  async startSessionWithContext(sessionId) {
+  async startSessionWithContext(sessionId, opts = {}) {
     const session = (this.state.allSessions || this.state.sessions).find(s => s.id === sessionId)
       || this._findProjectSession(sessionId);
 
@@ -5642,28 +5664,28 @@ class CWMApp {
       return;
     }
 
-    await this._launchContextSession(dir, wsId);
+    await this._launchContextSession(dir, wsId, opts);
   }
 
   /**
    * Start a new Claude session with project context from a project directory path.
    * Used by the project-level and project-session context menus.
    */
-  async startProjectWithContext(projectPath) {
+  async startProjectWithContext(projectPath, opts = {}) {
     if (!projectPath) {
       this.showToast('No project path available', 'warning');
       return;
     }
 
     const wsId = this.state.activeWorkspace ? this.state.activeWorkspace.id : null;
-    await this._launchContextSession(projectPath, wsId);
+    await this._launchContextSession(projectPath, wsId, opts);
   }
 
   /**
    * Shared implementation: create a new session in a directory and inject a
    * context-orientation prompt once the terminal WebSocket connects.
    */
-  async _launchContextSession(dir, wsId) {
+  async _launchContextSession(dir, wsId, opts = {}) {
     const dirParts = dir.replace(/\\/g, '/').split('/');
     const projectName = dirParts[dirParts.length - 1] || 'project';
 
@@ -5675,6 +5697,7 @@ class CWMApp {
         workingDir: dir,
         command: 'claude',
       };
+      if (opts.bypassPermissions) payload.bypassPermissions = true;
       const data = await this.api('POST', '/api/sessions', payload);
       const newSession = data.session || data;
       await this.loadSessions();
@@ -5692,7 +5715,7 @@ class CWMApp {
       const contextPrompt = `Read and analyze this project directory. Look at the file structure, any README, CLAUDE.md, PLANNING.md, TODO.md, package.json, or similar files. Understand the tech stack, architecture, and current state of the project. Then give me a brief summary of what you found and ask what I'd like to work on.`;
 
       // Open the terminal with the session's working directory
-      this.openTerminalInPane(emptySlot, newSession.id, newSession.name, { cwd: dir });
+      this.openTerminalInPane(emptySlot, newSession.id, newSession.name, { cwd: dir, ...(opts.bypassPermissions ? { bypassPermissions: true } : {}) });
 
       // Wait for the terminal to connect, then send the context prompt
       const tp = this.terminalPanes[emptySlot];
