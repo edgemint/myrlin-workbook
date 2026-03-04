@@ -31,6 +31,7 @@ const DEFAULT_STATE = {
   features: {},           // { featureId: { id, workspaceId, name, description, status, priority, sessionIds, ... } }
   worktreeTasks: {},      // { taskId: { id, workspaceId, sessionId, featureId, branch, worktreePath, repoDir, description, baseBranch, status, createdAt, completedAt } }
   projectDefaults: {},   // { [encodedName]: { defaultDir: string } }
+  sessionNames: {},      // { [claudeUUID]: string } — display names for all sessions
   settings: {
     autoRecover: true,
     notificationLevel: 'all', // 'all' | 'errors' | 'none'
@@ -117,6 +118,7 @@ class Store extends EventEmitter {
         features: parsed.features || {},
         worktreeTasks: parsed.worktreeTasks || {},
         projectDefaults: parsed.projectDefaults || {},
+        sessionNames: parsed.sessionNames || {},
       };
     } catch (_) {
       return null;
@@ -215,6 +217,42 @@ class Store extends EventEmitter {
     this._state.projectDefaults[encodedName] = { defaultDir: defaultDir || '' };
     this.save();
     return this._state.projectDefaults[encodedName];
+  }
+
+  // ─── Session Names ────────────────────────────────────────────────────────
+
+  /**
+   * Persist a display name for a Claude session UUID.
+   * @param {string} claudeUUID - The Claude session UUID
+   * @param {string} name - Display name (1–200 chars)
+   * @returns {{ claudeUUID: string, name: string } | null}
+   */
+  setSessionName(claudeUUID, name) {
+    if (!claudeUUID || typeof claudeUUID !== 'string') return null;
+    if (!name || typeof name !== 'string' || name.trim() === '') return null;
+    const trimmed = name.trim().slice(0, 200);
+    if (!this._state.sessionNames) this._state.sessionNames = {};
+    this._state.sessionNames[claudeUUID] = trimmed;
+    this._debouncedSave();
+    return { claudeUUID, name: trimmed };
+  }
+
+  /**
+   * Get a stored display name for a Claude session UUID.
+   * @param {string} claudeUUID
+   * @returns {string | null}
+   */
+  getSessionName(claudeUUID) {
+    if (!claudeUUID || typeof claudeUUID !== 'string') return null;
+    return (this._state.sessionNames && this._state.sessionNames[claudeUUID]) || null;
+  }
+
+  /**
+   * Return the entire sessionNames map.
+   * @returns {{ [claudeUUID: string]: string }}
+   */
+  getAllSessionNames() {
+    return this._state.sessionNames || {};
   }
 
   getAllWorkspacesList() {
