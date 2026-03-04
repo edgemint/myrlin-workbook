@@ -451,6 +451,13 @@ class PtySessionManager {
               store.setSessionName(newUUID, existingName);
               console.log(`[PTY] Carried session name "${existingName}" to new UUID ${newUUID}`);
             }
+          } else {
+            // First UUID detection for this session — carry the store session's display name
+            const storeSession = store.getSession(sessionId);
+            if (storeSession && storeSession.name) {
+              store.setSessionName(newUUID, storeSession.name);
+              console.log(`[PTY] Synced store session name "${storeSession.name}" to first UUID ${newUUID}`);
+            }
           }
         } catch (_) {}
 

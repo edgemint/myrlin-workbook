@@ -2007,6 +2007,9 @@ class CWMApp {
       this.loadSessionNames(),
     ]);
 
+    // Re-render projects now that sessionNames is fully populated
+    this.renderProjects();
+
     // Restore active workspace from localStorage if still valid
     if (savedWorkspaceId && !this.state.activeWorkspace) {
       const ws = this.state.workspaces.find(w => w.id === savedWorkspaceId);
@@ -2015,6 +2018,12 @@ class CWMApp {
         this.renderWorkspaces();
       }
     }
+
+    // Re-render projects now that sessionNames is guaranteed to be loaded.
+    // loadProjects() may have called renderProjects() earlier (e.g. from sessionStorage
+    // cache, synchronously) before loadSessionNames() had a chance to finish — re-render
+    // here ensures friendly names are shown instead of raw UUIDs.
+    this.renderProjects();
 
     await this.loadSessions();
 
