@@ -3406,31 +3406,21 @@ class CWMApp {
   }
 
   /**
-   * Sync a title across both localStorage project titles and any linked workspace sessions.
-   * Call this whenever a title is set from ANY source.
-   * @param {string} claudeSessionId - The Claude session UUID
-   * @param {string} title - The new title
+   * Persist a session display name to the server and update the local map.
+   * Single source of truth — no localStorage writes, no fire-and-forget loops.
+   * @param {string} claudeSessionId - Claude UUID
+   * @param {string} title - Display name to store
    */
-  syncSessionTitle(claudeSessionId, title) {
-    if (!claudeSessionId || !title) return;
-    // 1. Update localStorage project titles
-    const titles = JSON.parse(localStorage.getItem('cwm_projectSessionTitles') || '{}');
-    titles[claudeSessionId] = title;
-    localStorage.setItem('cwm_projectSessionTitles', JSON.stringify(titles));
-    // 2. Update any workspace sessions that link to this Claude UUID
-    const allSessions = this.state.allSessions || [];
-    for (const s of allSessions) {
-      if (s.resumeSessionId === claudeSessionId && s.name !== title) {
-        s.name = title;
-        // Fire-and-forget API update
-        this.api('PUT', `/api/sessions/${s.id}`, { name: title }).catch(() => {});
-      }
-    }
-    // Also check this.state.sessions (may be a different filtered array)
-    for (const s of (this.state.sessions || [])) {
-      if (s.resumeSessionId === claudeSessionId && s.name !== title) {
-        s.name = title;
-      }
+  async syncSessionTitle(claudeSessionId, title) {
+    if (!claudeSessionId || !title || typeof title !== 'string' || title.trim() === '') return;
+    const trimmed = title.trim();
+    try {
+      await this.api('PUT', `/api/session-names/${encodeURIComponent(claudeSessionId)}`, { name: trimmed });
+      // Update local map so callers see the change immediately without a reload
+      if (!this.state.sessionNames) this.state.sessionNames = {};
+      this.state.sessionNames[claudeSessionId] = trimmed;
+    } catch (err) {
+      this.showToast('Failed to save session name: ' + (err.message || 'unknown error'), 'error');
     }
   }
 
