@@ -2292,6 +2292,7 @@ class CWMApp {
       { key: 'topic', label: 'Topic', placeholder: 'Working on authentication flow' },
       { key: 'workingDir', label: 'Working Directory', placeholder: '~/projects/my-app' },
       { key: 'command', label: 'Command', placeholder: 'claude (default)' },
+      { key: 'bypassPermissions', label: 'Bypass Permissions', type: 'checkbox', value: false },
     ];
 
     // If we have a workspace selected, pre-fill workspaceId
@@ -12617,6 +12618,7 @@ class CWMApp {
         { key: 'repoDir', label: 'Repository Path', value: defaultDir, required: true },
         { key: 'baseBranch', label: 'Base Branch', value: 'main', required: true },
         { key: 'useWorktree', label: 'Create Worktree (recommended)', type: 'checkbox', value: true },
+        { key: 'bypassPermissions', label: 'Bypass Permissions', type: 'checkbox', value: false },
       ],
       confirmText: 'Create Feature Session',
     });
@@ -12647,6 +12649,7 @@ class CWMApp {
         workingDir: sessionDir,
         command: 'claude',
         topic: 'Feature: ' + result.featureName,
+        ...(result.bypassPermissions ? { bypassPermissions: true } : {}),
       });
 
       await this.loadSessions();
@@ -12655,7 +12658,7 @@ class CWMApp {
       const emptySlot = this.terminalPanes.findIndex(p => p === null);
       if (emptySlot !== -1) {
         this.setViewMode('terminal');
-        this.openTerminalInPane(emptySlot, sessionData.session.id, result.featureName, { cwd: sessionDir });
+        this.openTerminalInPane(emptySlot, sessionData.session.id, result.featureName, { cwd: sessionDir, ...(result.bypassPermissions ? { bypassPermissions: true } : {}) });
       }
 
       this.showToast('Feature session started: ' + result.featureName, 'success');
@@ -12700,6 +12703,8 @@ class CWMApp {
       fields.push({ key: 'featureId', label: 'Link to Feature', type: 'select', options: featureOptions });
     }
 
+    fields.push({ key: 'bypassPermissions', label: 'Bypass Permissions', type: 'checkbox', value: false });
+
     // Add model selector
     fields.push({ key: 'model', label: 'Model', type: 'select', options: [
       { value: '', label: 'Default' },
@@ -12732,6 +12737,7 @@ class CWMApp {
         baseBranch: result.baseBranch || 'main',
         featureId: result.featureId || undefined,
         model: result.model || undefined,
+        ...(result.bypassPermissions ? { bypassPermissions: true } : {}),
       });
 
       await this.loadSessions();
@@ -12741,7 +12747,7 @@ class CWMApp {
         const emptySlot = this.terminalPanes.findIndex(p => p === null);
         if (emptySlot !== -1) {
           this.setViewMode('terminal');
-          this.openTerminalInPane(emptySlot, data.session.id, branch, { cwd: data.task.worktreePath });
+          this.openTerminalInPane(emptySlot, data.session.id, branch, { cwd: data.task.worktreePath, ...(result.bypassPermissions ? { bypassPermissions: true } : {}) });
         }
       }
 
