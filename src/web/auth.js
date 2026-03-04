@@ -90,6 +90,23 @@ function readPasswordFromFile(filePath) {
 }
 
 /**
+ * Read requireAuth flag from a config file. Defaults to true if absent.
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+function readRequireAuthFromFile(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const config = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      if (typeof config.requireAuth === 'boolean') {
+        return config.requireAuth;
+      }
+    }
+  } catch (_) {}
+  return true; // default: auth required
+}
+
+/**
  * Save password to a config file (merges with existing keys).
  * @param {string} dir - Config directory path
  * @param {string} filePath - Config file path
@@ -160,6 +177,25 @@ function loadPassword() {
 
 const AUTH_PASSWORD = loadPassword();
 
+/**
+ * Load the requireAuth setting.
+ * Priority: CWM_NO_AUTH env var > ~/.tomnar/config.json > ./state/config.json > true (default)
+ * @returns {boolean}
+ */
+function loadRequireAuth() {
+  if (process.env.CWM_NO_AUTH === '1' || process.env.CWM_NO_AUTH === 'true') {
+    return false;
+  }
+  // Home config takes priority over local
+  if (fs.existsSync(HOME_CONFIG_FILE)) {
+    const val = readRequireAuthFromFile(HOME_CONFIG_FILE);
+    if (!val) return false; // explicitly disabled
+  }
+  return readRequireAuthFromFile(LOCAL_CONFIG_FILE);
+}
+
+const AUTH_REQUIRED = loadRequireAuth();
+
 // In-memory set of valid tokens. Tokens survive for the lifetime of
 // the server process. A restart invalidates all tokens (acceptable
 // for a local dev-tool).
@@ -195,16 +231,15 @@ function extractBearerToken(headerValue) {
  * Responds with 401 if the token is missing or invalid.
  */
 function requireAuth(req, res, next) {
-  const token = extractBearerToken(req.headers.authorization);
+  if (!AUTH_REQUIRED) return next();
 
+  const token = extractBearerToken(req.headers.authorization);
   if (!token || !activeTokens.has(token)) {
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Valid Bearer token required. POST /api/auth/login to authenticate.',
     });
   }
-
-  // Attach token to request for downstream use (e.g. logout)
   req.authToken = token;
   next();
 }
@@ -296,6 +331,7 @@ function setupAuth(app) {
  * @returns {boolean}
  */
 function isValidToken(token) {
+  if (!AUTH_REQUIRED) return true;
   return !!token && activeTokens.has(token);
 }
 
@@ -305,4 +341,5 @@ module.exports = {
   setupAuth,
   requireAuth,
   isValidToken,
+  isAuthRequired: () => AUTH_REQUIRED,
 };
