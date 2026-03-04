@@ -2026,6 +2026,11 @@ class CWMApp {
    * Load the server-persisted claudeUUID→name map into this.state.sessionNames.
    * Falls back to empty object on any error.
    */
+  /**
+   * Load the server-persisted claudeUUID→name map into this.state.sessionNames.
+   * On first boot, migrates any titles stored in the legacy localStorage key
+   * (cwm_projectSessionTitles) to the server, then removes the localStorage entry.
+   */
   async loadSessionNames() {
     try {
       const data = await this.api('GET', '/api/session-names');
@@ -2033,6 +2038,37 @@ class CWMApp {
     } catch (_) {
       this.state.sessionNames = {};
     }
+
+    // ── One-time migration from legacy localStorage key ──
+    const legacyRaw = localStorage.getItem('cwm_projectSessionTitles');
+    if (!legacyRaw) return; // Nothing to migrate
+
+    let legacy = {};
+    try { legacy = JSON.parse(legacyRaw); } catch (_) { /* corrupt — skip */ }
+
+    const serverMap = this.state.sessionNames;
+    const migrations = Object.entries(legacy)
+      .filter(([uuid, name]) => uuid && name && !serverMap[uuid]);
+
+    if (migrations.length > 0) {
+      // Fire migrations in parallel — tolerate individual failures
+      await Promise.allSettled(
+        migrations.map(async ([uuid, name]) => {
+          try {
+            await this.api('PUT', `/api/session-names/${encodeURIComponent(uuid)}`, { name });
+            serverMap[uuid] = name; // Update local map immediately
+          } catch (_) {
+            // Leave the localStorage entry intact if the PUT fails
+            delete legacy[uuid]; // Don't count it as migrated
+          }
+        })
+      );
+    }
+
+    // Remove the legacy key — entries that failed to migrate will be lost
+    // (acceptable: they'll just appear nameless until re-titled)
+    localStorage.removeItem('cwm_projectSessionTitles');
+    console.log(`[CWM] Migrated ${migrations.length} session name(s) from localStorage to server.`);
   }
 
   async loadWorkspaces() {
