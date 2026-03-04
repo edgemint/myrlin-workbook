@@ -3,7 +3,7 @@
  * Postinstall script: fix node-pty spawn-helper permissions on macOS/Linux.
  * The prebuilt spawn-helper binary ships without execute permission (644),
  * causing posix_spawnp failures. This sets it to 755.
- * See: https://github.com/therealarthur/myrlin-workbook/issues/4
+ * See: https://github.com/therealarthur/tomnar-workbook/issues/4
  */
 'use strict';
 

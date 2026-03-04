@@ -1325,8 +1325,13 @@ app.post('/api/sessions/:id/auto-title', requireAuth, (req, res) => {
     if (session) {
       store.updateSession(req.params.id, { name: title });
     }
-    // Also persist to the sessionNames map keyed by Claude UUID
-    store.setSessionName(claudeSessionId, title);
+    // Persist to the sessionNames map keyed by Claude UUID.
+    // Guard: only write if claudeSessionId is a real Claude UUID, not the store session
+    // ID (which happens when resumeSessionId is null and we fell back to req.params.id).
+    // A store session ID will resolve via store.getSession(); a Claude UUID won't.
+    if (!store.getSession(claudeSessionId)) {
+      store.setSessionName(claudeSessionId, title);
+    }
     return res.json({ success: true, title, claudeSessionId });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to read session: ' + err.message });
@@ -5697,10 +5702,10 @@ app.delete('/api/tunnels/:id', requireAuth, (req, res) => {
 //  NAMED TUNNEL (Cloudflare token-based, persistent domain)
 // ──────────────────────────────────────────────────────────
 
-const NAMED_TUNNEL_HOME_CONFIG = path.join(os.homedir(), '.myrlin', 'config.json');
+const NAMED_TUNNEL_HOME_CONFIG = path.join(os.homedir(), '.tomnar', 'config.json');
 const NAMED_TUNNEL_LOCAL_CONFIG = path.join(__dirname, '..', '..', 'state', 'config.json');
 
-function readMyrlinConfig() {
+function readTomnarConfig() {
   for (const p of [NAMED_TUNNEL_HOME_CONFIG, NAMED_TUNNEL_LOCAL_CONFIG]) {
     try {
       if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
@@ -5709,10 +5714,10 @@ function readMyrlinConfig() {
   return {};
 }
 
-function writeMyrlinConfig(updates) {
-  const cfg = readMyrlinConfig();
+function writeTomnarConfig(updates) {
+  const cfg = readTomnarConfig();
   Object.assign(cfg, updates);
-  const homeDir = path.join(os.homedir(), '.myrlin');
+  const homeDir = path.join(os.homedir(), '.tomnar');
   try {
     if (!fs.existsSync(homeDir)) fs.mkdirSync(homeDir, { recursive: true });
     fs.writeFileSync(NAMED_TUNNEL_HOME_CONFIG, JSON.stringify(cfg, null, 2), 'utf-8');
@@ -5786,7 +5791,7 @@ function startNamedTunnel(token) {
 }
 
 app.get('/api/tunnel/named', requireAuth, (req, res) => {
-  const cfg = readMyrlinConfig();
+  const cfg = readTomnarConfig();
   res.json({
     configured: !!(process.env.CWM_CF_TOKEN || cfg.cfTunnelToken),
     autoStart: !!cfg.cfTunnelAutoStart,
@@ -5807,12 +5812,12 @@ app.put('/api/tunnel/named/config', requireAuth, (req, res) => {
     updates.cfTunnelToken = token;
   }
   if (autoStart !== undefined) updates.cfTunnelAutoStart = !!autoStart;
-  writeMyrlinConfig(updates);
+  writeTomnarConfig(updates);
   res.json({ success: true });
 });
 
 app.post('/api/tunnel/named/start', requireAuth, async (req, res) => {
-  const cfg = readMyrlinConfig();
+  const cfg = readTomnarConfig();
   const token = process.env.CWM_CF_TOKEN || cfg.cfTunnelToken;
   if (!token) {
     return res.status(400).json({ error: 'No tunnel token configured. Add one in Settings > Remote Access.' });
@@ -5843,7 +5848,7 @@ app.post('/api/tunnel/named/stop', requireAuth, (req, res) => {
 
 // Auto-start on server init if configured
 (async () => {
-  const cfg = readMyrlinConfig();
+  const cfg = readTomnarConfig();
   const token = process.env.CWM_CF_TOKEN || cfg.cfTunnelToken;
   if (cfg.cfTunnelAutoStart && token) {
     const check = await checkCloudflared();

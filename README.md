@@ -3,8 +3,8 @@
 </p>
 <h1 align="center">tomnar's workbook</h1>
 <p align="center">
-  <a href="https://www.npmjs.com/package/myrlin-workbook"><img src="https://img.shields.io/npm/v/myrlin-workbook.svg?style=flat-square" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/myrlin-workbook"><img src="https://img.shields.io/npm/dm/myrlin-workbook.svg?style=flat-square" alt="npm downloads"></a>
+  <a href="https://www.npmjs.com/package/tomnar-workbook"><img src="https://img.shields.io/npm/v/tomnar-workbook.svg?style=flat-square" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/tomnar-workbook"><img src="https://img.shields.io/npm/dm/tomnar-workbook.svg?style=flat-square" alt="npm downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=flat-square" alt="License: AGPL-3.0"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-18%2B-green.svg?style=flat-square" alt="Node.js 18+"></a>
 </p>
@@ -24,15 +24,15 @@ Open-source workspace manager for Claude Code - multi-pane embedded terminals, k
 ### Try it now
 
 ```bash
-npx myrlin-workbook          # Opens browser, discovers your real Claude sessions
-npx myrlin-workbook --demo   # Opens browser with sample data (no real sessions needed)
+npx tomnar-workbook          # Opens browser, discovers your real Claude sessions
+npx tomnar-workbook --demo   # Opens browser with sample data (no real sessions needed)
 ```
 
 ### Install from source
 
 ```bash
-git clone https://github.com/therealarthur/myrlin-workbook.git
-cd myrlin-workbook
+git clone https://github.com/therealarthur/tomnar-workbook.git
+cd tomnar-workbook
 npm install
 npm run gui                   # Real sessions
 npm run gui:demo              # Sample data
@@ -40,19 +40,19 @@ npm run gui:demo              # Sample data
 
 ### Password
 
-On first launch, a random password is generated and saved to `~/.myrlin/config.json`. This password **persists across updates, reinstalls, and npx cache clears** — you'll always use the same password.
+On first launch, a random password is generated and saved to `~/.tomnar/config.json`. This password **persists across updates, reinstalls, and npx cache clears** — you'll always use the same password.
 
 To set your own:
 
 ```bash
 # Option 1: Edit the config file (recommended — persists forever)
-# ~/.myrlin/config.json → { "password": "your-password-here" }
+# ~/.tomnar/config.json → { "password": "your-password-here" }
 
 # Option 2: Environment variable (overrides config, per-session)
-CWM_PASSWORD=mypassword npx myrlin-workbook
+CWM_PASSWORD=mypassword npx tomnar-workbook
 ```
 
-Password lookup order: `CWM_PASSWORD` env var > `~/.myrlin/config.json` > `./state/config.json` > auto-generate.
+Password lookup order: `CWM_PASSWORD` env var > `~/.tomnar/config.json` > `./state/config.json` > auto-generate.
 
 ### Prerequisites
 
@@ -68,7 +68,7 @@ Password lookup order: `CWM_PASSWORD` env var > `~/.myrlin/config.json` > `./sta
 
 | Command | Description |
 |---------|-------------|
-| `npx myrlin-workbook` | Web GUI via npx |
+| `npx tomnar-workbook` | Web GUI via npx |
 | `npm run gui` | Web GUI (localhost:3456) |
 | `npm run gui:demo` | Web GUI with sample data |
 | `npm start` | TUI mode (terminal-only, blessed) |
@@ -412,10 +412,10 @@ PORT=8080 npm run gui
 npm install -g windows-build-tools
 ```
 
-### `npx myrlin-workbook` hangs on install
+### `npx tomnar-workbook` hangs on install
 Same issue. node-pty is compiling. If it fails, install the C++ build tools first, then try again.
 
-**Still stuck?** Open an [issue](https://github.com/therealarthur/myrlin-workbook/issues) with your full error output and OS version.
+**Still stuck?** Open an [issue](https://github.com/therealarthur/tomnar-workbook/issues) with your full error output and OS version.
 
 ---
 

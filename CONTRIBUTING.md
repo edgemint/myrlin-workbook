@@ -7,8 +7,8 @@ Thanks for wanting to contribute! Here's how to get started.
 1. **Fork** the repo on GitHub (top right button)
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/myrlin-workbook.git
-   cd myrlin-workbook
+   git clone https://github.com/YOUR-USERNAME/tomnar-workbook.git
+   cd tomnar-workbook
    npm install
    ```
 3. **Run** it to make sure everything works:
@@ -88,7 +88,7 @@ src/
 |----------|---------|-------------|
 | `PORT` | `3456` | Server port |
 | `CWM_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for LAN access) |
-| `CWM_PASSWORD` | `myrlin` | Login password |
+| `CWM_PASSWORD` | `tomnar` | Login password |
 | `CWM_NO_OPEN` | unset | Skip auto-opening browser on start |
 
 ## Questions?

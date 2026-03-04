@@ -1,12 +1,12 @@
 {
-  "name": "myrlin-workbook",
+  "name": "tomnar-workbook",
   "version": "0.8.2",
   "description": "Browser-based project manager for Claude Code sessions - session discovery, multi-terminal, cost tracking, docs, and kanban board",
   "main": "src/index.js",
   "bin": {
-    "myrlin-workbook": "./src/gui.js",
-    "myrlin": "./src/gui.js",
-    "myrlin-tui": "./src/index.js",
+    "tomnar-workbook": "./src/gui.js",
+    "tomnar": "./src/gui.js",
+    "tomnar-tui": "./src/index.js",
     "cwm": "./src/index.js"
   },
   "scripts": {
@@ -23,9 +23,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/therealarthur/myrlin-workbook.git"
+    "url": "https://github.com/therealarthur/tomnar-workbook.git"
   },
-  "homepage": "https://github.com/therealarthur/myrlin-workbook",
+  "homepage": "https://github.com/therealarthur/tomnar-workbook",
   "engines": {
     "node": ">=18.0.0"
   },
@@ -40,7 +40,7 @@
     "session-manager",
     "developer-tools",
     "xterm",
-    "myrlin"
+    "tomnar"
   ],
   "author": "Arthur",
   "license": "AGPL-3.0-only",

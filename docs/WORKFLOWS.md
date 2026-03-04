@@ -25,7 +25,7 @@ A practical guide to using tomnar's workbook's features, from basic workspace ma
 ### Installation
 
 ```bash
-npx myrlin-workbook
+npx tomnar-workbook
 ```
 
 This starts the GUI server on `http://localhost:3456` and opens your browser.

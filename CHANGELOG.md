@@ -197,7 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Refocus Session** — right-click any session to distill the full conversation into a structured context document, then Reset (clear + reinject) or Compact (compress + reinject) the session. Gives Claude a fresh context window with full project awareness.
 - **Unified Context Menus** — terminal pane right-click now includes all session management options (Start/Stop, Model, Flags, Rename, Summarize, Templates, Move to Workspace, etc.) matching the sidebar context menu.
-- **Persistent Password Config** — password can now be set in `~/.myrlin/config.json` for automatic startup without prompts.
+- **Persistent Password Config** — password can now be set in `~/.tomnar/config.json` for automatic startup without prompts.
 - **Cross-Platform Support** — merged community PR for WSL/Linux shell spawning. Shell selection, browser launch, and demo paths now work on Windows, Linux, and macOS.
 - **Security Hardening** — three-layer input validation (API boundary, WebSocket boundary, spawn point) for command injection prevention. Shell allowlist for safe binary selection. HTML escaping for template chip tooltips.
 

@@ -11,7 +11,7 @@
  *
  * Password is loaded from (in priority order):
  *   1. CWM_PASSWORD environment variable
- *   2. ~/.myrlin/config.json (persists across npx updates/reinstalls)
+ *   2. ~/.tomnar/config.json (persists across npx updates/reinstalls)
  *   3. ./state/config.json (local project config)
  *   4. Auto-generated on first run (saved to both locations)
  *
@@ -25,7 +25,7 @@ const os = require('os');
 
 // ─── Configuration ─────────────────────────────────────────
 const TOKEN_BYTE_LENGTH = 32;
-const HOME_CONFIG_DIR = path.join(os.homedir(), '.myrlin');
+const HOME_CONFIG_DIR = path.join(os.homedir(), '.tomnar');
 const HOME_CONFIG_FILE = path.join(HOME_CONFIG_DIR, 'config.json');
 const LOCAL_CONFIG_DIR = path.join(__dirname, '..', '..', 'state');
 const LOCAL_CONFIG_FILE = path.join(LOCAL_CONFIG_DIR, 'config.json');
@@ -115,8 +115,8 @@ function savePasswordToFile(dir, filePath, password) {
 
 /**
  * Load or generate the auth password.
- * Priority: env var > ~/.myrlin/config.json > ./state/config.json > auto-generate.
- * When auto-generating, saves to both ~/.myrlin/ and ./state/ so the password
+ * Priority: env var > ~/.tomnar/config.json > ./state/config.json > auto-generate.
+ * When auto-generating, saves to both ~/.tomnar/ and ./state/ so the password
  * persists across npx cache clears and project reinstalls.
  * @returns {string}
  */
@@ -126,7 +126,7 @@ function loadPassword() {
     return process.env.CWM_PASSWORD;
   }
 
-  // 2. Home directory config (~/.myrlin/config.json) — persists across reinstalls
+  // 2. Home directory config (~/.tomnar/config.json) — persists across reinstalls
   const homePassword = readPasswordFromFile(HOME_CONFIG_FILE);
   if (homePassword) {
     // Also sync to local config so it's visible in the project
@@ -150,7 +150,7 @@ function loadPassword() {
   console.log('');
   console.log('══════════════════════════════════════════════════');
   console.log('  CWM auto-generated password: ' + generated);
-  console.log('  Saved to: ~/.myrlin/config.json');
+  console.log('  Saved to: ~/.tomnar/config.json');
   console.log('  Set CWM_PASSWORD env var to override.');
   console.log('══════════════════════════════════════════════════');
   console.log('');
