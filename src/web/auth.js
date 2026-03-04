@@ -323,6 +323,15 @@ function setupAuth(app) {
 
     return res.json({ authenticated });
   });
+
+  /**
+   * GET /api/auth/config
+   * Public endpoint. Returns whether auth is required.
+   * Frontend uses this to decide whether to show the login screen.
+   */
+  app.get('/api/auth/config', (req, res) => {
+    return res.json({ requireAuth: AUTH_REQUIRED });
+  });
 }
 
 /**
