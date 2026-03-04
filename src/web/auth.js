@@ -6,6 +6,7 @@
  * - POST /api/auth/logout - Invalidates the token
  * - GET  /api/auth/check - Validates current token
  * - GET  /api/auth/config - Returns whether auth is required (public, pre-auth bootstrap)
+ * - POST /api/auth/config - Update requireAuth setting (protected)
  *
  * Protected routes use the requireAuth middleware which checks
  * the Authorization: Bearer <token> header.
@@ -342,6 +343,34 @@ function setupAuth(app) {
    */
   app.get('/api/auth/config', (req, res) => {
     return res.json({ requireAuth: AUTH_REQUIRED });
+  });
+
+  /**
+   * POST /api/auth/config
+   * Protected endpoint. Saves requireAuth setting to ./state/config.json.
+   * Body: { requireAuth: boolean }
+   */
+  app.post('/api/auth/config', requireAuth, (req, res) => {
+    const { requireAuth: newVal } = req.body || {};
+    if (typeof newVal !== 'boolean') {
+      return res.status(400).json({ error: 'requireAuth must be a boolean.' });
+    }
+    try {
+      if (!fs.existsSync(LOCAL_CONFIG_DIR)) {
+        fs.mkdirSync(LOCAL_CONFIG_DIR, { recursive: true });
+      }
+      const config = {};
+      try {
+        if (fs.existsSync(LOCAL_CONFIG_FILE)) {
+          Object.assign(config, JSON.parse(fs.readFileSync(LOCAL_CONFIG_FILE, 'utf-8')));
+        }
+      } catch (_) {}
+      config.requireAuth = newVal;
+      fs.writeFileSync(LOCAL_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to save config.' });
+    }
+    return res.json({ success: true, requireAuth: newVal });
   });
 }
 

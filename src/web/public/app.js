@@ -3677,6 +3677,7 @@ class CWMApp {
       { key: 'defaultModelRunning', label: 'Default Model (Running)', description: 'Auto-assign when tasks enter Running. Sonnet balances speed and quality for implementation. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
       { key: 'cfNamedTunnel', label: 'Cloudflare Named Tunnel', description: 'Expose tomnar\'s workbook on the internet via your own domain. Go to one.dash.cloudflare.com → Networks → Tunnels → Create a tunnel, then copy the token from the install command (the long eyJ… string).', category: 'Remote Access', type: 'tunnel' },
       { key: 'subscriptionBudget', label: 'Monthly Subscription Budget', description: 'Monthly budget equivalent for Claude Max subscription. Used to compute rolling 5h/7d usage % in the Costs tab. Set to 0 to disable. Stored server-side.', category: 'Costs', type: 'subscription-budget' },
+      { key: 'requireAuth', label: 'Require Password', description: 'Require a password to access the app. Disable for local-only use. Takes effect after restart. Warning: only disable when not exposed to untrusted networks.', category: 'Security', type: 'require-auth' },
     ];
   }
 
@@ -4264,6 +4265,22 @@ class CWMApp {
                 </label>
               </div>
             </div>`;
+        } else if (item.type === 'require-auth') {
+          html += `
+            <div class="settings-row" data-setting-key="${item.key}">
+              <div class="settings-row-info">
+                <div class="settings-row-label">${this.escapeHtml(item.label)}</div>
+                <div class="settings-row-desc">${this.escapeHtml(item.description)}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="require-auth-status" style="font-size:11px;color:var(--subtext0);">loading…</span>
+                <label class="toggle-switch" style="cursor:pointer;" title="Toggle password requirement">
+                  <input type="checkbox" id="require-auth-toggle" style="position:absolute;opacity:0;width:0;height:0;" />
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+            <div id="require-auth-restart-note" hidden style="font-size:11px;color:#f38ba8;padding:2px 0 6px 0;">Restart the server for this change to take effect.</div>`;
         } else {
           const checked = this.state.settings[item.key] ? 'checked' : '';
           html += `
@@ -4355,6 +4372,38 @@ class CWMApp {
         if (subBudgetInput) subBudgetInput.value = btn.dataset.preset;
       });
     });
+
+    // ── Require-auth toggle ──────────────────────────────────
+    const requireAuthToggle = document.getElementById('require-auth-toggle');
+    const requireAuthStatus = document.getElementById('require-auth-status');
+    const requireAuthNote = document.getElementById('require-auth-restart-note');
+
+    if (requireAuthToggle) {
+      // Load current server value
+      fetch('/api/auth/config')
+        .then(r => r.json())
+        .then(d => {
+          const current = d.requireAuth !== false;
+          requireAuthToggle.checked = current;
+          if (requireAuthStatus) requireAuthStatus.textContent = current ? 'enabled' : 'disabled';
+        })
+        .catch(() => {
+          if (requireAuthStatus) requireAuthStatus.textContent = 'unknown';
+        });
+
+      requireAuthToggle.addEventListener('change', async () => {
+        const newVal = requireAuthToggle.checked;
+        try {
+          await this.api('POST', '/api/auth/config', { requireAuth: newVal });
+          if (requireAuthStatus) requireAuthStatus.textContent = newVal ? 'enabled' : 'disabled';
+          if (requireAuthNote) requireAuthNote.hidden = false;
+        } catch {
+          // Revert toggle on failure
+          requireAuthToggle.checked = !newVal;
+          if (requireAuthStatus) requireAuthStatus.textContent = !newVal ? 'enabled' : 'disabled';
+        }
+      });
+    }
 
     if (ntSaveBtn) {
       ntSaveBtn.addEventListener('click', async () => {
