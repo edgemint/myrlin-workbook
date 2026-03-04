@@ -1325,6 +1325,8 @@ app.post('/api/sessions/:id/auto-title', requireAuth, (req, res) => {
     if (session) {
       store.updateSession(req.params.id, { name: title });
     }
+    // Also persist to the sessionNames map keyed by Claude UUID
+    store.setSessionName(claudeSessionId, title);
     return res.json({ success: true, title, claudeSessionId });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to read session: ' + err.message });
@@ -4038,6 +4040,39 @@ app.put('/api/project-defaults/:encodedName', requireAuth, (req, res) => {
   const store = getStore();
   const result = store.setProjectDefault(encodedName, { defaultDir: dirToStore });
   res.json({ success: true, projectDefault: result });
+});
+
+// ──────────────────────────────────────────────────────────
+//  SESSION NAMES (claudeUUID → display name)
+// ──────────────────────────────────────────────────────────
+
+/**
+ * GET /api/session-names
+ * Returns the full { [claudeUUID]: string } map.
+ */
+app.get('/api/session-names', requireAuth, (req, res) => {
+  const store = getStore();
+  res.json(store.getAllSessionNames());
+});
+
+/**
+ * PUT /api/session-names/:claudeId
+ * Body: { name: string }
+ * Persists a display name for the given Claude session UUID.
+ */
+app.put('/api/session-names/:claudeId', requireAuth, (req, res) => {
+  const { claudeId } = req.params;
+  const { name } = req.body || {};
+  if (!claudeId || typeof claudeId !== 'string' || claudeId.trim() === '' || claudeId.length > 128) {
+    return res.status(400).json({ error: 'claudeId must be a non-empty string ≤128 chars.' });
+  }
+  if (!name || typeof name !== 'string' || name.trim() === '' || name.length > 200) {
+    return res.status(400).json({ error: 'name must be a non-empty string ≤200 chars.' });
+  }
+  const store = getStore();
+  const result = store.setSessionName(claudeId.trim(), name.trim());
+  if (!result) return res.status(400).json({ error: 'Failed to set session name.' });
+  res.json({ claudeId: result.claudeUUID, name: result.name });
 });
 
 // ──────────────────────────────────────────────────────────
