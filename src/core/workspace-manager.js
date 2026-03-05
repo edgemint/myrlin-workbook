@@ -84,12 +84,8 @@ function addSessionToWorkspace(workspaceId, sessionOpts) {
     throw new Error(`Workspace ${workspaceId} not found`);
   }
 
-  if (!sessionOpts || !sessionOpts.name) {
-    throw new Error('Session name is required');
-  }
-
   return store.createSession({
-    name: sessionOpts.name,
+    name: (sessionOpts && sessionOpts.name) || '',
     workspaceId,
     workingDir: sessionOpts.workingDir || '',
     topic: sessionOpts.topic || '',

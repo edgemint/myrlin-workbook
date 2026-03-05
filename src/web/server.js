@@ -626,10 +626,7 @@ app.get('/api/sessions', requireAuth, (req, res) => {
 app.post('/api/sessions', requireAuth, (req, res) => {
   const { name, workspaceId, workingDir, topic, command, resumeSessionId } = req.body || {};
 
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    return res.status(400).json({ error: 'Session name is required.' });
-  }
-  if (name.trim().length > 200) {
+  if (name && name.trim().length > 200) {
     return res.status(400).json({ error: 'Session name must be 200 characters or fewer.' });
   }
   if (!workspaceId) {
@@ -652,7 +649,7 @@ app.post('/api/sessions', requireAuth, (req, res) => {
 
   const store = getStore();
   const session = store.createSession({
-    name: name.trim(),
+    name: name ? name.trim() : '',
     workspaceId,
     workingDir: safeDir,
     topic: topic || '',
