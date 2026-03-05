@@ -8806,20 +8806,31 @@ class CWMApp {
     if (overlay) overlay.hidden = true;
   }
 
-  openConversationResult(sessionId, projectPath) {
-    // Open the session in a terminal pane - not added to any workspace
+  async openConversationResult(sessionId, projectPath) {
+    const existingManaged = (this.state.allSessions || []).find(s => s.resumeSessionId === sessionId);
+    if (this.focusPaneBySessionId(existingManaged ? existingManaged.id : sessionId)) {
+      this.showToast('Focused existing session', 'info');
+      return;
+    }
     const emptySlot = this.terminalPanes.findIndex(p => p === null);
     if (emptySlot === -1) {
       this.showToast('All terminal panes full. Close one first.', 'warning');
       return;
     }
-    this.setViewMode('terminal');
-    this.openTerminalInPane(emptySlot, sessionId, sessionId, {
-      cwd: projectPath,
-      resumeSessionId: sessionId,
-      command: 'claude',
-    });
-    this.showToast('Opening conversation in terminal', 'info');
+    try {
+      const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+      const fallbackName = dirParts[dirParts.length - 1] || sessionId;
+      const session = await this.ensureSessionRegistered(sessionId, fallbackName, projectPath);
+      this.setViewMode('terminal');
+      this.openTerminalInPane(emptySlot, session.id, session.name, {
+        cwd: projectPath,
+        resumeSessionId: sessionId,
+        command: 'claude',
+      });
+      this.showToast('Opening conversation in terminal', 'info');
+    } catch (err) {
+      this.showToast(err.message || 'Failed to open conversation', 'error');
+    }
   }
 
 
