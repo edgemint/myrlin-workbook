@@ -440,6 +440,7 @@ class PtySessionManager {
         console.log(`[PTY] New Claude session UUID for ${sessionId}: ${newUUID}${oldUUID ? ' (was ' + oldUUID + ')' : ''}`);
 
         let displayName = newUUID; // default: UUID itself
+        let storeWriteSucceeded = false;
         try {
           const store = getStore();
           const storeSession = store.getSession(sessionId);
@@ -466,26 +467,29 @@ class PtySessionManager {
           } else {
             // ── After /clear — always start fresh ──
             if (storeSession) {
-              store.updateSession(sessionId, { resumeSessionId: newUUID });
-              store.updateSession(sessionId, { name: '' });
+              store.updateSession(sessionId, { resumeSessionId: newUUID, name: '' });
             }
             // New UUID gets the UUID itself as its auto-name; never carry old name
             store.setSessionName(newUUID, newUUID, 'auto');
             console.log(`[PTY] Post-/clear: registered new UUID ${newUUID} (was ${oldUUID})`);
           }
+          storeWriteSucceeded = true;
         } catch (_) {}
 
         session.detectedResumeId = newUUID;
 
         // ── Push uuid-detected control message to all attached WebSocket clients ──
-        const msg = JSON.stringify({ type: 'uuid-detected', uuid: newUUID, name: displayName });
-        for (const ws of session.clients) {
-          try {
-            if (ws.readyState === 1) { // WebSocket.OPEN
-              ws.send(msg);
+        // Only push if store writes succeeded to avoid notifying UI of unpersisted state
+        if (storeWriteSucceeded) {
+          const msg = JSON.stringify({ type: 'uuid-detected', uuid: newUUID, name: displayName });
+          for (const ws of session.clients) {
+            try {
+              if (ws.readyState === 1) { // WebSocket.OPEN
+                ws.send(msg);
+              }
+            } catch (_) {
+              // ignore individual send failures
             }
-          } catch (_) {
-            // ignore individual send failures
           }
         }
       }
