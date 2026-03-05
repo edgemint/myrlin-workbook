@@ -6323,10 +6323,21 @@ app.get('/api/workspaces/:id/conflicts', requireAuth, (req, res) => {
 
   // Collect modified files per session
   // Map: sessionId → { id, name, files: string[] }
+  // Deduplicate by workingDir: sessions sharing the same directory see the same git status,
+  // so they cannot meaningfully conflict with each other — only cross-dir conflicts matter.
+  const seenDirs = new Map(); // normalizedDir -> session (keep first session per dir)
+  for (const session of runningSessions) {
+    const normDir = path.resolve(session.workingDir).toLowerCase();
+    if (!seenDirs.has(normDir)) {
+      seenDirs.set(normDir, session);
+    }
+  }
+  const dedupedSessions = Array.from(seenDirs.values());
+
   const sessionFiles = new Map();
   let checkedSessions = 0;
 
-  for (const session of runningSessions) {
+  for (const session of dedupedSessions) {
     try {
       const stdout = execSync('git status --porcelain', {
         cwd: session.workingDir,
