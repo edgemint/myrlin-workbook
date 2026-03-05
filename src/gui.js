@@ -13,9 +13,52 @@
  *   PORT=3456                 Override the default port
  */
 
+const fs = require('fs');
+const path = require('path');
 const { getStore } = require('./state/store');
 const { startServer, getPtyManager } = require('./web/server');
 const { backupFrontend } = require('./web/backup');
+
+// ─── PID File ──────────────────────────────────────────────
+// Kill any previous server instance before starting, so closing the
+// terminal window (which orphans gui.js on Windows) doesn't leave a
+// stale process holding the port.
+
+const PID_FILE = path.join(__dirname, '..', 'state', 'server.pid');
+
+function killStalePid() {
+  try {
+    if (!fs.existsSync(PID_FILE)) return;
+    const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    if (!oldPid || oldPid === process.pid) return;
+    try {
+      process.kill(oldPid, 0); // throws if process doesn't exist
+      process.kill(oldPid);    // SIGTERM
+      console.log(`[PID] Killed stale server process ${oldPid}`);
+      // Give it a moment to release the port
+      const deadline = Date.now() + 2000;
+      const sleep = new Int32Array(new SharedArrayBuffer(4));
+      while (Date.now() < deadline) {
+        try { process.kill(oldPid, 0); } catch { break; }
+        Atomics.wait(sleep, 0, 0, 100);
+      }
+    } catch (_) { /* already gone */ }
+  } catch (_) {}
+}
+
+function writePid() {
+  try {
+    fs.mkdirSync(path.dirname(PID_FILE), { recursive: true });
+    fs.writeFileSync(PID_FILE, String(process.pid));
+  } catch (_) {}
+}
+
+function removePid() {
+  try { fs.unlinkSync(PID_FILE); } catch (_) {}
+}
+
+killStalePid();
+writePid();
 
 // ─── Initialize Store ──────────────────────────────────────
 
@@ -219,6 +262,7 @@ if (!process.env.CWM_NO_OPEN) {
 // ─── Graceful Shutdown ─────────────────────────────────────
 
 process.on('SIGINT', () => {
+  removePid();
   const ptyManager = getPtyManager();
   if (ptyManager) ptyManager.destroyAll();
   store.save();
@@ -227,6 +271,7 @@ process.on('SIGINT', () => {
 });
 
 process.on('SIGTERM', () => {
+  removePid();
   const ptyManager = getPtyManager();
   if (ptyManager) ptyManager.destroyAll();
   store.save();
