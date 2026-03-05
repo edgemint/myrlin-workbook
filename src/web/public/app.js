@@ -1637,14 +1637,11 @@ class CWMApp {
           try {
             const ps = JSON.parse(projSessJson);
             const claudeSessionId = ps.sessionName;
-            const projectName = ps.projectPath ? (ps.projectPath.split('\\').pop() || ps.projectPath.split('/').pop() || claudeSessionId) : claudeSessionId;
-            const shortId = claudeSessionId.length > 8 ? claudeSessionId.substring(0, 8) : claudeSessionId;
-            const friendlyName = projectName + ' (' + shortId + ')';
             await this.api('POST', '/api/sessions', {
-              name: friendlyName, workspaceId: targetWsId, workingDir: ps.projectPath,
+              name: claudeSessionId, workspaceId: targetWsId, workingDir: ps.projectPath,
               topic: 'Resumed session', command: 'claude', resumeSessionId: claudeSessionId,
             });
-            this.showToast(`Session "${friendlyName}" added`, 'success');
+            this.showToast(`Session added`, 'success');
             await this.loadSessions();
             await this.loadStats();
             this.renderWorkspaces();
@@ -1768,9 +1765,7 @@ class CWMApp {
           const emptySlot = this.terminalPanes.findIndex(p => p === null);
           if (emptySlot !== -1) {
             try {
-              const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
-              const fallbackName = dirParts[dirParts.length - 1] || sessName;
-              const session = await this.ensureSessionRegistered(sessName, fallbackName, projectPath);
+              const session = await this.ensureSessionRegistered(sessName, sessName, projectPath);
               this.openTerminalInPane(emptySlot, session.id, session.name, {
                 cwd: projectPath,
                 resumeSessionId: sessName,
@@ -2602,11 +2597,9 @@ class CWMApp {
    * Used by right-click on project directory headers in workspace sidebar.
    */
   async createSessionInDir(workspaceId, dir, flags = {}) {
-    const dirParts = dir.replace(/\\/g, '/').split('/');
-    const name = dirParts[dirParts.length - 1] || 'new-session';
     try {
       const payload = {
-        name: `${name} - new`,
+        name: '',
         workspaceId,
         workingDir: dir,
         command: 'claude',
@@ -2614,7 +2607,7 @@ class CWMApp {
       if (flags.bypassPermissions || this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
       const data = await this.api('POST', '/api/sessions', payload);
       const session = data.session || data;
-      this.showToast(`Session created in ${name}`, 'success');
+      this.showToast(`Session created`, 'success');
       await this.loadSessions();
       // Auto-open in first empty terminal pane
       const emptySlot = this.terminalPanes.findIndex(p => p === null);
@@ -3122,9 +3115,7 @@ class CWMApp {
           return;
         }
         try {
-          const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
-          const fallbackName = dirParts[dirParts.length - 1] || sessionName;
-          const session = await this.ensureSessionRegistered(sessionName, fallbackName, projectPath);
+          const session = await this.ensureSessionRegistered(sessionName, sessionName, projectPath);
           this.openTerminalInPane(emptySlot, session.id, session.name, {
             cwd: projectPath,
             resumeSessionId: sessionName,
@@ -3152,9 +3143,7 @@ class CWMApp {
             return;
           }
           try {
-            const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
-            const fallbackName = dirParts[dirParts.length - 1] || sessionName;
-            const session = await this.ensureSessionRegistered(sessionName, fallbackName, projectPath);
+            const session = await this.ensureSessionRegistered(sessionName, sessionName, projectPath);
             this.openTerminalInPane(emptySlot, session.id, session.name, {
               cwd: projectPath,
               resumeSessionId: sessionName,
@@ -3176,12 +3165,8 @@ class CWMApp {
           this.showToast('Select or create a project first', 'warning');
           return;
         }
-        // Use project folder name as friendly default name instead of raw UUID
-        const projectName = projectPath ? projectPath.split('\\').pop() || projectPath.split('/').pop() || sessionName : sessionName;
-        const shortId = sessionName.length > 8 ? sessionName.substring(0, 8) : sessionName;
-        const friendlyName = projectName + ' (' + shortId + ')';
         this.api('POST', '/api/sessions', {
-          name: friendlyName,
+          name: sessionName,
           workspaceId: this.state.activeWorkspace.id,
           workingDir: projectPath,
           topic: 'Resumed session',
@@ -3205,11 +3190,8 @@ class CWMApp {
             this.showToast('Select or create a project first', 'warning');
             return;
           }
-          const projectName = projectPath ? projectPath.split('\\').pop() || projectPath.split('/').pop() || sessionName : sessionName;
-          const shortId = sessionName.length > 8 ? sessionName.substring(0, 8) : sessionName;
-          const friendlyName = projectName + ' (' + shortId + ')';
           this.api('POST', '/api/sessions', {
-            name: friendlyName,
+            name: sessionName,
             workspaceId: this.state.activeWorkspace.id,
             workingDir: projectPath,
             topic: 'Resumed session',
@@ -3330,7 +3312,7 @@ class CWMApp {
           }
           const sid = 'proj-' + Date.now().toString(36);
           this.setViewMode('terminal');
-          this.openTerminalInPane(emptySlot, sid, displayName, {
+          this.openTerminalInPane(emptySlot, sid, '', {
             cwd: projectPath,
             command: 'claude',
             newSession: true,
@@ -3349,7 +3331,7 @@ class CWMApp {
             }
             const sid = 'proj-' + Date.now().toString(36);
             this.setViewMode('terminal');
-            this.openTerminalInPane(emptySlot, sid, displayName, {
+            this.openTerminalInPane(emptySlot, sid, '', {
               cwd: projectPath,
               command: 'claude',
               bypassPermissions: true,
@@ -6185,13 +6167,10 @@ class CWMApp {
    * context-orientation prompt once the terminal WebSocket connects.
    */
   async _launchContextSession(dir, wsId, opts = {}) {
-    const dirParts = dir.replace(/\\/g, '/').split('/');
-    const projectName = dirParts[dirParts.length - 1] || 'project';
-
     try {
       // Create a new session in the workspace (or unassigned if no workspace)
       const payload = {
-        name: `${projectName} - context`,
+        name: '',
         workspaceId: wsId,
         workingDir: dir,
         command: 'claude',
@@ -6233,7 +6212,7 @@ class CWMApp {
         setTimeout(() => clearInterval(checkReady), 30000);
       }
 
-      this.showToast(`Starting ${projectName} with project context...`, 'info');
+      this.showToast(`Starting session with project context...`, 'info');
     } catch (err) {
       this.showToast(err.message || 'Failed to start context session', 'error');
     }
@@ -8842,9 +8821,7 @@ class CWMApp {
       return;
     }
     try {
-      const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
-      const fallbackName = dirParts[dirParts.length - 1] || sessionId;
-      const session = await this.ensureSessionRegistered(sessionId, fallbackName, projectPath);
+      const session = await this.ensureSessionRegistered(sessionId, sessionId, projectPath);
       this.setViewMode('terminal');
       this.openTerminalInPane(emptySlot, session.id, session.name, {
         cwd: projectPath,
@@ -8969,9 +8946,7 @@ class CWMApp {
                 return;
               }
               console.log('[DnD] Project-session drop - resumeSessionId:', claudeSessionId, 'cwd:', ps.projectPath);
-              const dirParts = (ps.projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
-              const fallbackName = dirParts[dirParts.length - 1] || claudeSessionId;
-              const session = await this.ensureSessionRegistered(claudeSessionId, fallbackName, ps.projectPath);
+              const session = await this.ensureSessionRegistered(claudeSessionId, claudeSessionId, ps.projectPath);
               this.openTerminalInPane(slotIdx, session.id, session.name, {
                 cwd: ps.projectPath,
                 resumeSessionId: claudeSessionId,
@@ -15692,11 +15667,6 @@ class CWMApp {
     this.els.launcherForm.hidden = false;
     this.els.launcherFormSelected.innerHTML = `<strong>${this.escapeHtml(name)}</strong> - ${this.escapeHtml(dirPath)}`;
 
-    // Auto-generate a session name from the project directory name
-    if (!this.els.launcherSessionName.value) {
-      this.els.launcherSessionName.value = name + ' - new';
-    }
-
     // Scroll form into view
     this.els.launcherForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -15805,7 +15775,7 @@ class CWMApp {
       return;
     }
 
-    const name = this.els.launcherSessionName.value.trim() || 'new-session';
+    const name = this.els.launcherSessionName.value.trim() || '';
     const model = this.els.launcherModel.value || undefined;
 
     // Disable submit button to prevent double-click
