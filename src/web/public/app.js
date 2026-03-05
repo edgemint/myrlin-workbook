@@ -1746,7 +1746,8 @@ class CWMApp {
           e.stopPropagation();
           const encoded = newSessionBtn.dataset.encoded;
           const projectName = newSessionBtn.dataset.name || encoded;
-          const defaultDir = (this.state.projectDefaults[encoded] || {}).defaultDir || '';
+          const projectPath = newSessionBtn.dataset.path || '';
+          const defaultDir = (this.state.projectDefaults[encoded] || {}).defaultDir || projectPath;
           this.createSession({ name: projectName, workingDir: defaultDir });
           return;
         }
