@@ -134,6 +134,7 @@ class CWMApp {
         maxConcurrentTasks: 4,
         defaultModelPlanning: '',
         defaultModelRunning: '',
+        defaultBypassPermissions: false,
       }, JSON.parse(localStorage.getItem('cwm_settings') || '{}')),
     };
 
@@ -2497,7 +2498,7 @@ class CWMApp {
       { key: 'topic', label: 'Topic', placeholder: 'Working on authentication flow' },
       { key: 'workingDir', label: 'Working Directory', placeholder: '~/projects/my-app', value: opts.workingDir || '' },
       { key: 'command', label: 'Command', placeholder: 'claude (default)' },
-      { key: 'bypassPermissions', label: 'Bypass Permissions', type: 'checkbox', value: false },
+      { key: 'bypassPermissions', label: 'Bypass Permissions', type: 'checkbox', value: !!this.state.settings.defaultBypassPermissions },
     ];
 
     // If we have a workspace selected, pre-fill workspaceId
@@ -2603,7 +2604,7 @@ class CWMApp {
         workingDir: dir,
         command: 'claude',
       };
-      if (flags.bypassPermissions) payload.bypassPermissions = true;
+      if (flags.bypassPermissions || this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
       const data = await this.api('POST', '/api/sessions', payload);
       const session = data.session || data;
       this.showToast(`Session created in ${name}`, 'success');
@@ -2613,7 +2614,7 @@ class CWMApp {
       if (emptySlot !== -1) {
         this.setViewMode('terminal');
         const spawnOpts = { cwd: dir, newSession: true };
-        if (flags.bypassPermissions) spawnOpts.bypassPermissions = true;
+        if (flags.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
         this.openTerminalInPane(emptySlot, session.id, session.name, spawnOpts);
       }
     } catch (err) {
@@ -3712,6 +3713,7 @@ class CWMApp {
       { key: 'defaultModelRunning', label: 'Default Model (Running)', description: 'Auto-assign when tasks enter Running. Sonnet balances speed and quality for implementation. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
       { key: 'cfNamedTunnel', label: 'Cloudflare Named Tunnel', description: 'Expose tomnar\'s workbook on the internet via your own domain. Go to one.dash.cloudflare.com → Networks → Tunnels → Create a tunnel, then copy the token from the install command (the long eyJ… string).', category: 'Remote Access', type: 'tunnel' },
       { key: 'subscriptionBudget', label: 'Monthly Subscription Budget', description: 'Monthly budget equivalent for Claude Max subscription. Used to compute rolling 5h/7d usage % in the Costs tab. Set to 0 to disable. Stored server-side.', category: 'Costs', type: 'subscription-budget' },
+      { key: 'defaultBypassPermissions', label: 'Default Bypass Permissions', description: 'Automatically enable bypass permissions (--dangerously-skip-permissions) for all new sessions — including discovered sessions and sessions created via drag or right-click.', category: 'Automation' },
       { key: 'requireAuth', label: 'Require Password', description: 'Require a password to access the app. Disable for local-only use. Takes effect after restart. Warning: only disable when not exposed to untrusted networks.', category: 'Security', type: 'require-auth' },
     ];
   }
@@ -6317,6 +6319,9 @@ class CWMApp {
           // Pass the Claude CLI session UUID so cost tracking works immediately
           if (proj.sessionId) {
             sessionData.resumeSessionId = proj.sessionId;
+          }
+          if (this.state.settings.defaultBypassPermissions) {
+            sessionData.bypassPermissions = true;
           }
           await this.api('POST', '/api/sessions', sessionData);
           created++;
@@ -9790,7 +9795,12 @@ class CWMApp {
       this._playNotificationSound();
 
       // Show toast
-      this.showToast(`${qualifiedName} is ready for input`, 'success');
+      this.showActionToast(
+        `${qualifiedName} is ready for input`,
+        'success',
+        'Go to session',
+        () => this._navigateToSession(sessionId, sessionIdx)
+      );
 
       // If the pane is in a non-active tab group, highlight the tab
       this._highlightTabGroupForSession(sessionId);
@@ -9804,10 +9814,14 @@ class CWMApp {
     // regardless of which pane is active. If the user has the app in the background,
     // they always want to know — even for the "active" terminal slot.
     if (this.getSetting('browserNotifications') && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
-      new Notification('CWM', {
+      const notif = new Notification('CWM', {
         body: `${qualifiedName} is ready for input`,
         icon: '/favicon.ico',
       });
+      notif.onclick = () => {
+        window.focus();
+        this._navigateToSession(sessionId, sessionIdx);
+      };
     }
   }
 
