@@ -7796,7 +7796,7 @@ class CWMApp {
           const parts = dir.replace(/\\/g, '/').split('/');
           const shortDir = parts.slice(-2).join('/');
           return `<div class="ws-project-group" data-group-key="${this.escapeHtml(groupKey)}">
-            <div class="ws-project-group-header" data-dir="${this.escapeHtml(dir)}" data-ws-id="${ws.id}" title="${this.escapeHtml(dir)}">
+            <div class="ws-project-group-header" draggable="true" data-dir="${this.escapeHtml(dir)}" data-ws-id="${ws.id}" title="${this.escapeHtml(dir)}">
               <span class="ws-project-group-chevron${isExpanded ? ' open' : ''}">&#9654;</span>
               <span class="ws-project-group-path">${this.escapeHtml(shortDir)}</span>
               <span class="ws-project-group-count">${dirSessions.length}</span>
