@@ -7420,16 +7420,21 @@ class CWMApp {
     const onPointerMove = (e) => {
       if (!dragging) return;
       currentX = e.clientX - startX;
-      if (currentX > 0) toast.style.transform = `translateX(${currentX}px)`;
+      const offset = Math.max(0, currentX);
+      toast.style.transform = `translateX(${offset}px)`;
+      toast.style.opacity = Math.max(0, 1 - offset / 200);
     };
     const onPointerUp = () => {
       if (!dragging) return;
       dragging = false;
       toast.classList.remove('toast-dragging');
-      toast.style.transform = '';
       if (currentX > 80) {
         toast.classList.add('toast-swipe-exit');
-        setTimeout(() => toast.remove(), 200);
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+      } else {
+        toast.style.transform = '';
+        toast.style.opacity = '';
       }
     };
     toast.addEventListener('pointerdown', onPointerDown);
