@@ -9046,7 +9046,13 @@ class CWMApp {
           }
         });
 
-        // Close button
+        // Minimize button (background without killing)
+        const minimizeBtn = pane.querySelector('.terminal-pane-minimize');
+        if (minimizeBtn) {
+          minimizeBtn.addEventListener('click', () => this.minimizeTerminalPane(slotIdx));
+        }
+
+        // Close button (always kills the PTY)
         const closeBtn = pane.querySelector('.terminal-pane-close');
         if (closeBtn) {
           closeBtn.addEventListener('click', () => this.closeTerminalPaneOrKill(slotIdx));
@@ -9190,6 +9196,8 @@ class CWMApp {
         titleEl.classList.add('session-name-empty');
       }
     }
+    const minimizeBtn2 = paneEl.querySelector('.terminal-pane-minimize');
+    if (minimizeBtn2) minimizeBtn2.hidden = false;
     const closeBtn = paneEl.querySelector('.terminal-pane-close');
     if (closeBtn) closeBtn.hidden = false;
     const uploadBtn2 = paneEl.querySelector('.terminal-pane-upload');
@@ -9517,6 +9525,8 @@ class CWMApp {
     paneEl.classList.add('terminal-pane-empty');
     const titleEl = paneEl.querySelector('.terminal-pane-title');
     if (titleEl) titleEl.textContent = 'Drop a session here';
+    const minimizeBtn3 = paneEl.querySelector('.terminal-pane-minimize');
+    if (minimizeBtn3) minimizeBtn3.hidden = true;
     const closeBtn = paneEl.querySelector('.terminal-pane-close');
     if (closeBtn) closeBtn.hidden = true;
     const uploadBtn3 = paneEl.querySelector('.terminal-pane-upload');
