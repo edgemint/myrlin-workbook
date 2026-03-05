@@ -1594,6 +1594,9 @@ class CWMApp {
         } else if (e.dataTransfer.types.includes('cwm/project') || e.dataTransfer.types.includes('cwm/project-session')) {
           e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
           workspaceItem.classList.add('drag-over');
+        } else if (e.dataTransfer.types.includes('cwm/project-group')) {
+          e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+          workspaceItem.classList.add('workspace-drop-target');
         }
         return;
       }
