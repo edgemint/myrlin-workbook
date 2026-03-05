@@ -9384,8 +9384,15 @@ class CWMApp {
         try {
           await this.api('POST', `/api/pty/${encodeURIComponent(tp.sessionId)}/kill`);
           this.showToast('Session killed - drop again to restart', 'warning');
+          // Remove from Projects panel
+          const claudeId = tp.spawnOpts && tp.spawnOpts.resumeSessionId;
+          if (claudeId) {
+            this.state.hiddenProjectSessions.add(claudeId);
+            localStorage.setItem('cwm_hiddenProjectSessions', JSON.stringify([...this.state.hiddenProjectSessions]));
+          }
           // Close the terminal pane since the process is dead
           this.closeTerminalPane(slotIdx);
+          this.renderProjects();
         } catch (err) {
           this.showToast(err.message || 'Failed to kill session', 'error');
         }
@@ -9562,6 +9569,9 @@ class CWMApp {
    */
   async closeTerminalPaneOrKill(slotIdx) {
     const tp = this.terminalPanes[slotIdx];
+    // Run completion check eagerly in case the 2-second debounce hasn't fired yet
+    // (e.g. user clicks X immediately after opening a pane that just got a repaint)
+    if (tp) tp._checkForCompletion();
     if (tp && tp._isWorking) {
       const confirmed = await this.showConfirmModal({
         title: 'Kill active session?',
@@ -9577,8 +9587,16 @@ class CWMApp {
       } catch (_) {
         // Session may already be dead; proceed with closing the pane
       }
+      // Remove from Projects panel — killed sessions shouldn't linger there.
+      // Minimized sessions (minimizeTerminalPane) skip this block intentionally.
+      const claudeId = tp.spawnOpts && tp.spawnOpts.resumeSessionId;
+      if (claudeId) {
+        this.state.hiddenProjectSessions.add(claudeId);
+        localStorage.setItem('cwm_hiddenProjectSessions', JSON.stringify([...this.state.hiddenProjectSessions]));
+      }
     }
     this.closeTerminalPane(slotIdx, false);
+    this.renderProjects();
   }
 
   /**
