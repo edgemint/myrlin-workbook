@@ -1630,6 +1630,19 @@ class CWMApp {
         workspaceItem.classList.remove('workspace-drop-target', 'ws-drop-before', 'ws-drop-after', 'drag-over');
         const targetWsId = workspaceItem.dataset.id;
 
+        // Folder group move to workspace
+        const projectGroupJson = e.dataTransfer.getData('cwm/project-group');
+        if (projectGroupJson) {
+          e.preventDefault(); e.stopPropagation();
+          try {
+            const { dir, wsId } = JSON.parse(projectGroupJson);
+            await this.moveFolderGroupToWorkspace(dir, wsId, targetWsId);
+          } catch (err) {
+            this.showToast('Failed to move folder: ' + (err.message || ''), 'error');
+          }
+          return;
+        }
+
         // Session move to workspace
         const sessionId = e.dataTransfer.getData('cwm/session');
         if (sessionId) {
