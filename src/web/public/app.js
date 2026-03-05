@@ -1657,10 +1657,10 @@ class CWMApp {
           try {
             const project = JSON.parse(projectJson);
             await this.api('POST', '/api/sessions', {
-              name: project.name, workspaceId: targetWsId, workingDir: project.path,
+              name: '', workspaceId: targetWsId, workingDir: project.path,
               topic: '', command: 'claude',
             });
-            this.showToast(`Session "${project.name}" created`, 'success');
+            this.showToast('Session created', 'success');
             await this.loadSessions();
             await this.loadStats();
           } catch (err) {
@@ -8974,11 +8974,9 @@ class CWMApp {
             try {
               const project = JSON.parse(projectJson);
               const tempId = 'pty-project-' + Date.now();
-              const dropBehaviour = this.state.settings.projectDropBehavior || 'continue';
-              const spawnOpts = { cwd: project.path, command: 'claude' };
-              if (dropBehaviour === 'new' || dropBehaviour === 'new-bypass') spawnOpts.newSession = true;
-              if (dropBehaviour === 'continue-bypass' || dropBehaviour === 'new-bypass' || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-              this.openTerminalInPane(slotIdx, tempId, project.name, spawnOpts);
+              const spawnOpts = { cwd: project.path, command: 'claude', newSession: true };
+              if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
+              this.openTerminalInPane(slotIdx, tempId, '', spawnOpts);
               this.showToast('Opening project - drag to a project to save it', 'info');
             } catch (err) {
               this.showToast(err.message || 'Failed to open project', 'error');
