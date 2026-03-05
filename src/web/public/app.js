@@ -9893,6 +9893,41 @@ class CWMApp {
     }
   }
 
+  /**
+   * Navigate the UI to the terminal pane for a given session.
+   * Switches to terminal view, switches tab groups if needed,
+   * and focuses the specific pane slot.
+   * @param {string} sessionId
+   * @param {number} activeSlotIdx - Index in this.terminalPanes (-1 if not in active group)
+   */
+  _navigateToSession(sessionId, activeSlotIdx) {
+    // Ensure terminal view is visible
+    if (this.state.viewMode !== 'terminal') {
+      this.setViewMode('terminal');
+    }
+
+    // Session is already in the active group — just focus its pane
+    if (activeSlotIdx !== -1) {
+      this.setActiveTerminalPane(activeSlotIdx);
+      return;
+    }
+
+    // Session is in a different tab group — find and switch to it
+    if (!this._tabGroups) return;
+    for (const group of this._tabGroups) {
+      if (group.id === this._activeGroupId) continue;
+      const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
+      if (paneEntry) {
+        this.switchTerminalGroup(group.id);
+        // Wait one frame for the group switch to restore pane DOM before focusing
+        requestAnimationFrame(() => {
+          this.setActiveTerminalPane(paneEntry.slot);
+        });
+        return;
+      }
+    }
+  }
+
 
   /* ═══════════════════════════════════════════════════════════
      TERMINAL FOCUS & RESIZE
