@@ -15715,6 +15715,7 @@ class CWMApp {
    * @returns {Promise<object>} The managed session record
    */
   async ensureSessionRegistered(claudeUUID, fallbackName, projectPath) {
+    if (!projectPath) throw new Error('ensureSessionRegistered: projectPath is required');
     // Return existing record if already registered
     const existing = (this.state.allSessions || []).find(s => s.resumeSessionId === claudeUUID);
     if (existing) return existing;
