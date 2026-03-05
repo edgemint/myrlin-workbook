@@ -15706,6 +15706,38 @@ class CWMApp {
   }
 
   /**
+   * Ensure a Claude session UUID has a managed session record in state.
+   * Idempotent: if a record with resumeSessionId === claudeUUID already exists,
+   * returns it immediately without creating a duplicate.
+   * @param {string} claudeUUID - The Claude session UUID (from ~/.claude/projects/)
+   * @param {string} fallbackName - Name to use if no stored title exists
+   * @param {string} projectPath - Absolute path of the project directory
+   * @returns {Promise<object>} The managed session record
+   */
+  async ensureSessionRegistered(claudeUUID, fallbackName, projectPath) {
+    // Return existing record if already registered
+    const existing = (this.state.allSessions || []).find(s => s.resumeSessionId === claudeUUID);
+    if (existing) return existing;
+
+    const workspaceId = await this.findOrCreateWorkspaceForDir(projectPath);
+    const storedTitle = this.getProjectSessionTitle(claudeUUID);
+    const name = storedTitle || fallbackName;
+
+    const data = await this.api('POST', '/api/sessions', {
+      name,
+      workspaceId,
+      workingDir: projectPath,
+      resumeSessionId: claudeUUID,
+      command: 'claude',
+    });
+    const session = data.session || data;
+
+    await this.loadSessions();
+    await this.loadStats();
+    return session;
+  }
+
+  /**
    * Launch a new Claude Code session in the selected project directory.
    * Creates the session via API, opens a terminal pane, and switches to terminal view.
    */
