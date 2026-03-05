@@ -9919,10 +9919,11 @@ class CWMApp {
       const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
       if (paneEntry) {
         this.switchTerminalGroup(group.id);
-        // Wait one frame for the group switch to restore pane DOM before focusing
-        requestAnimationFrame(() => {
+        // Double-RAF: first frame lets switchTerminalGroup's internal RAF (xterm refresh) complete,
+        // second frame focuses the pane after the canvas is fully painted.
+        requestAnimationFrame(() => { requestAnimationFrame(() => {
           this.setActiveTerminalPane(paneEntry.slot);
-        });
+        }); });
         return;
       }
     }
