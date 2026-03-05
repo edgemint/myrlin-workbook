@@ -2596,8 +2596,9 @@ class CWMApp {
    */
   async createSessionInDir(workspaceId, dir, flags = {}) {
     try {
+      const dirName = dir.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Session';
       const payload = {
-        name: '',
+        name: dirName,
         workspaceId,
         workingDir: dir,
         command: 'claude',
