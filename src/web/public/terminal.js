@@ -523,6 +523,13 @@ class TerminalPane {
       this._log('WebSocket OPEN');
       this._status('Connected. Starting session...', 'green');
       this.ws.send(JSON.stringify({ type: 'resize', cols: this.term.cols, rows: this.term.rows }));
+      // Treat every (re)connect as the start of a work cycle. The PTY will
+      // immediately replay the current screen; if it shows an idle prompt,
+      // _checkForCompletion will detect it and fire terminal-idle. Without
+      // this, _isWorking stays false from initialisation and _checkForCompletion
+      // bails out immediately, so already-idle sessions never notify.
+      this._isWorking = true;
+      this._idleNotified = false;
     };
 
     // ── Write batching: accumulate WebSocket data and flush to xterm
