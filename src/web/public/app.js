@@ -1414,7 +1414,7 @@ class CWMApp {
             if (session.resumeSessionId) spawnOpts.resumeSessionId = session.resumeSessionId;
             if (session.workingDir) spawnOpts.cwd = session.workingDir;
             if (session.command) spawnOpts.command = session.command;
-            if (session.bypassPermissions) spawnOpts.bypassPermissions = true;
+            if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
             if (session.verbose) spawnOpts.verbose = true;
             if (session.model) spawnOpts.model = session.model;
             if (session.agentTeams) spawnOpts.agentTeams = true;
@@ -1862,6 +1862,15 @@ class CWMApp {
       projList.addEventListener('dragend', (e) => {
         const el = e.target.closest('.project-session-item, .project-accordion-header');
         if (el) el.classList.remove('dragging');
+      });
+
+      projList.addEventListener('dblclick', (e) => {
+        const nameEl = e.target.closest('.project-session-name');
+        if (nameEl) {
+          e.stopPropagation();
+          const sessionItem = nameEl.closest('.project-session-item');
+          if (sessionItem) this.renameProjectSession(sessionItem.dataset.sessionName);
+        }
       });
 
       projList.addEventListener('touchstart', (e) => {
@@ -2769,6 +2778,13 @@ class CWMApp {
 
   async startSession(id) {
     try {
+      if (this.state.settings.defaultBypassPermissions) {
+        const session = (this.state.sessions || []).find(s => s.id === id)
+          || (this.state.allSessions || []).find(s => s.id === id);
+        if (session && !session.bypassPermissions) {
+          await this.api('PUT', `/api/sessions/${id}`, { bypassPermissions: true });
+        }
+      }
       await this.api('POST', `/api/sessions/${id}/start`);
       this.showToast('Session started', 'success');
       await this.refreshSessionData(id);
@@ -2789,6 +2805,13 @@ class CWMApp {
 
   async restartSession(id) {
     try {
+      if (this.state.settings.defaultBypassPermissions) {
+        const session = (this.state.sessions || []).find(s => s.id === id)
+          || (this.state.allSessions || []).find(s => s.id === id);
+        if (session && !session.bypassPermissions) {
+          await this.api('PUT', `/api/sessions/${id}`, { bypassPermissions: true });
+        }
+      }
       await this.api('POST', `/api/sessions/${id}/restart`);
       this.showToast('Session restarted', 'success');
       await this.refreshSessionData(id);
@@ -3110,6 +3133,7 @@ class CWMApp {
           cwd: projectPath,
           resumeSessionId: sessionName,
           command: 'claude',
+          ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
         });
       },
     });
@@ -3151,6 +3175,7 @@ class CWMApp {
           topic: 'Resumed session',
           command: 'claude',
           resumeSessionId: sessionName,
+          ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
         }).then(async () => {
           await this.loadSessions();
           await this.loadStats();
@@ -3197,6 +3222,7 @@ class CWMApp {
     items.push({
       label: 'Naming', icon: '&#9998;',
       submenu: [
+        { label: 'Rename...', action: () => this.renameProjectSession(sessionName) },
         { label: 'Auto Title', action: () => this.autoTitleProjectSession(sessionName) },
       ],
     });
@@ -3296,6 +3322,7 @@ class CWMApp {
             cwd: projectPath,
             command: 'claude',
             newSession: true,
+            ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
           });
         },
       });
@@ -3557,6 +3584,28 @@ class CWMApp {
     } catch (err) {
       this.showToast(err.message || 'Failed to auto-title', 'error');
     }
+  }
+
+  /**
+   * Manually rename a project (discovered) session.
+   * Prompts the user, persists via syncSessionTitle, and re-renders.
+   */
+  async renameProjectSession(claudeSessionId) {
+    const currentName = this.getProjectSessionTitle(claudeSessionId) || '';
+    const result = await this.showPromptModal({
+      title: 'Rename Session',
+      fields: [
+        { key: 'name', label: 'Name', value: currentName, required: true, placeholder: 'Session name...' },
+      ],
+      confirmText: 'Save',
+      confirmClass: 'btn-primary',
+    });
+    if (!result) return;
+    const name = (result.name || '').trim();
+    if (!name) return;
+    await this.syncSessionTitle(claudeSessionId, name, 'manual');
+    this.renderProjects();
+    this.renderWorkspaces();
   }
 
   /**
@@ -6135,7 +6184,7 @@ class CWMApp {
         workingDir: dir,
         command: 'claude',
       };
-      if (opts.bypassPermissions) payload.bypassPermissions = true;
+      if (opts.bypassPermissions || this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
       const data = await this.api('POST', '/api/sessions', payload);
       const newSession = data.session || data;
       await this.loadSessions();
@@ -6153,7 +6202,8 @@ class CWMApp {
       const contextPrompt = `Read and analyze this project directory. Look at the file structure, any README, CLAUDE.md, PLANNING.md, TODO.md, package.json, or similar files. Understand the tech stack, architecture, and current state of the project. Then give me a brief summary of what you found and ask what I'd like to work on.`;
 
       // Open the terminal with the session's working directory
-      this.openTerminalInPane(emptySlot, newSession.id, newSession.name, { cwd: dir, ...(opts.bypassPermissions ? { bypassPermissions: true } : {}) });
+      const ctxBypass = opts.bypassPermissions || this.state.settings.defaultBypassPermissions;
+      this.openTerminalInPane(emptySlot, newSession.id, newSession.name, { cwd: dir, ...(ctxBypass ? { bypassPermissions: true } : {}) });
 
       // Wait for the terminal to connect, then send the context prompt
       const tp = this.terminalPanes[emptySlot];
@@ -7886,11 +7936,11 @@ class CWMApp {
       { label: 'Open Terminal', icon: '&#9654;', action: () => {
         const emptySlot = this.terminalPanes.findIndex(p => p === null);
         if (emptySlot === -1) { this.showToast('All terminal panes full', 'warning'); return; }
-        this.api('POST', '/api/sessions', { name: `${ws.name} terminal`, workspaceId }).then(data => {
+        this.api('POST', '/api/sessions', { name: `${ws.name} terminal`, workspaceId, ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}) }).then(data => {
           if (data && data.session) {
             this.loadSessions();
             this.setViewMode('terminal');
-            this.openTerminalInPane(emptySlot, data.session.id, ws.name);
+            this.openTerminalInPane(emptySlot, data.session.id, ws.name, this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {});
           }
         }).catch(err => this.showToast(err.message, 'error'));
       }},
@@ -8233,7 +8283,7 @@ class CWMApp {
     // Control buttons - enable/disable based on status
     const isRunning = status === 'running' || status === 'idle';
     this.els.detailStartBtn.disabled = isRunning;
-    if (this.els.detailBypassCb) this.els.detailBypassCb.checked = !!session.bypassPermissions;
+    if (this.els.detailBypassCb) this.els.detailBypassCb.checked = !!session.bypassPermissions || !!this.state.settings.defaultBypassPermissions;
     this.els.detailStopBtn.disabled = !isRunning;
     this.els.detailRestartBtn.disabled = !isRunning;
 
@@ -8873,7 +8923,7 @@ class CWMApp {
               if (session.resumeSessionId) spawnOpts.resumeSessionId = session.resumeSessionId;
               if (session.workingDir) spawnOpts.cwd = session.workingDir;
               if (session.command) spawnOpts.command = session.command;
-              if (session.bypassPermissions) spawnOpts.bypassPermissions = true;
+              if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
               if (session.verbose) spawnOpts.verbose = true;
               if (session.model) spawnOpts.model = session.model;
               if (session.agentTeams) spawnOpts.agentTeams = true;
@@ -8901,6 +8951,7 @@ class CWMApp {
                 cwd: ps.projectPath,
                 resumeSessionId: claudeSessionId,
                 command: 'claude',
+                ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
               });
               this.showToast('Opening session - drag to a project to save it', 'info');
               this.renderProjects();
@@ -8920,7 +8971,7 @@ class CWMApp {
               const dropBehaviour = this.state.settings.projectDropBehavior || 'continue';
               const spawnOpts = { cwd: project.path, command: 'claude' };
               if (dropBehaviour === 'new' || dropBehaviour === 'new-bypass') spawnOpts.newSession = true;
-              if (dropBehaviour === 'continue-bypass' || dropBehaviour === 'new-bypass') spawnOpts.bypassPermissions = true;
+              if (dropBehaviour === 'continue-bypass' || dropBehaviour === 'new-bypass' || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
               this.openTerminalInPane(slotIdx, tempId, project.name, spawnOpts);
               this.showToast('Opening project - drag to a project to save it', 'info');
             } catch (err) {
@@ -8951,11 +9002,12 @@ class CWMApp {
                 workspaceId: workspaceId,
                 topic: '',
                 command: 'claude',
+                ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
               });
               await this.loadSessions();
               await this.loadStats();
               if (data && data.session) {
-                this.openTerminalInPane(slotIdx, data.session.id, wsName);
+                this.openTerminalInPane(slotIdx, data.session.id, wsName, this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {});
               }
             } catch (err) {
               this.showToast(err.message || 'Failed to create session', 'error');
@@ -11608,7 +11660,9 @@ class CWMApp {
       if (group && group.panes) {
         group.panes.forEach(p => {
           if (p.sessionId) {
-            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || 'Terminal', p.spawnOpts || {});
+            const restoreOpts = Object.assign({}, p.spawnOpts || {});
+            if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
+            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || 'Terminal', restoreOpts);
           }
         });
       }
@@ -11691,6 +11745,7 @@ class CWMApp {
       if (session.workingDir) spawnOpts.cwd = session.workingDir;
       if (session.flags) spawnOpts.flags = session.flags;
       if (session.model) spawnOpts.model = session.model;
+      if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
       this.openTerminalInPane(i, session.id, session.name || session.id, spawnOpts);
     }
 
@@ -15690,6 +15745,7 @@ class CWMApp {
         workspaceId,
       };
       if (model) payload.model = model;
+      if (this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
 
       const data = await this.api('POST', '/api/sessions', payload);
       const session = data.session || data;
@@ -15703,6 +15759,7 @@ class CWMApp {
       if (emptySlot !== -1) {
         const spawnOpts = { cwd: dir };
         if (model) spawnOpts.model = model;
+        if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
         this.setViewMode('terminal');
         this.openTerminalInPane(emptySlot, session.id, session.name, spawnOpts);
       } else {
