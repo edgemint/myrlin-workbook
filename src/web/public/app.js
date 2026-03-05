@@ -8855,7 +8855,7 @@ class CWMApp {
         // Close button
         const closeBtn = pane.querySelector('.terminal-pane-close');
         if (closeBtn) {
-          closeBtn.addEventListener('click', () => this.closeTerminalPane(slotIdx));
+          closeBtn.addEventListener('click', () => this.closeTerminalPaneOrKill(slotIdx));
         }
 
         // Mic (voice input) button - only show if SpeechRecognition API is available
@@ -9344,6 +9344,22 @@ class CWMApp {
     if (sessionName) {
       this.showToast(`"${sessionName}" moved to background - drag it back to reconnect`, 'info');
     }
+  }
+
+  /**
+   * Close a terminal pane. If the session is idle (not actively working),
+   * kill the underlying PTY process instead of leaving it in the background.
+   */
+  async closeTerminalPaneOrKill(slotIdx) {
+    const tp = this.terminalPanes[slotIdx];
+    if (tp && tp.sessionId && !tp._isWorking) {
+      try {
+        await this.api('POST', `/api/pty/${encodeURIComponent(tp.sessionId)}/kill`);
+      } catch (_) {
+        // Session may already be dead; proceed with closing the pane
+      }
+    }
+    this.closeTerminalPane(slotIdx);
   }
 
   /**
@@ -10373,9 +10389,9 @@ class CWMApp {
 
     // Bind close handlers
     strip.querySelectorAll('.terminal-tab-close').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        this.closeTerminalPane(parseInt(btn.dataset.slot, 10));
+        await this.closeTerminalPaneOrKill(parseInt(btn.dataset.slot, 10));
         this.updateTerminalTabs();
       });
     });
