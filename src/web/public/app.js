@@ -8939,20 +8939,22 @@ class CWMApp {
               const ps = JSON.parse(projSessJson);
               const claudeSessionId = ps.sessionName; // This IS the Claude session UUID
               // If already open anywhere, redirect focus instead of spawning duplicate
-              if (this.focusPaneBySessionId(claudeSessionId)) {
+              const existingForFocus = (this.state.allSessions || []).find(s => s.resumeSessionId === claudeSessionId);
+              if (this.focusPaneBySessionId(existingForFocus ? existingForFocus.id : claudeSessionId)) {
                 this.showToast('Session already open — focused existing pane', 'info');
                 return;
               }
               console.log('[DnD] Project-session drop - resumeSessionId:', claudeSessionId, 'cwd:', ps.projectPath);
-              // Open terminal directly - use the Claude session UUID as the PTY session ID
-              // so the PTY manager can reuse it on subsequent drops
-              this.openTerminalInPane(slotIdx, claudeSessionId, claudeSessionId, {
+              const dirParts = (ps.projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+              const fallbackName = dirParts[dirParts.length - 1] || claudeSessionId;
+              const session = await this.ensureSessionRegistered(claudeSessionId, fallbackName, ps.projectPath);
+              this.openTerminalInPane(slotIdx, session.id, session.name, {
                 cwd: ps.projectPath,
                 resumeSessionId: claudeSessionId,
                 command: 'claude',
                 ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
               });
-              this.showToast('Opening session - drag to a project to save it', 'info');
+              this.showToast('Opening session', 'info');
               this.renderProjects();
             } catch (err) {
               this.showToast(err.message || 'Failed to open session', 'error');
