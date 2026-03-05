@@ -90,6 +90,7 @@ class PtySession {
     this.pingInterval = null;    // Keepalive ping interval ID
     this._lastActiveTimer = null; // Debounce timer for lastActive updates
     this.createdAt = Date.now();  // Track when session was spawned
+    this.lastOutputAt = null;     // Timestamp of most recent PTY output
   }
 
   /**
@@ -322,6 +323,7 @@ class PtySessionManager {
     // Data is sent instantly to preserve the native terminal streaming feel.
     // Only skips a client if its WebSocket buffer exceeds 64KB (overwhelmed tab).
     ptyProcess.onData((data) => {
+      session.lastOutputAt = Date.now();
       session.appendScrollback(data);
 
       // Broadcast immediately to all connected WebSocket clients
@@ -741,6 +743,7 @@ class PtySessionManager {
         alive: session.alive,
         clientCount: session.clients.size,
         createdAt: session.createdAt || null,
+        lastOutputAt: session.lastOutputAt || null,
       });
     }
     return result;

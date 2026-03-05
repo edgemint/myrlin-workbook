@@ -825,11 +825,7 @@ class CWMApp {
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
         const title = chip.getAttribute('title') || '';
-        if (title.includes('Running')) {
-          this.toggleSessionManager('running');
-        } else {
-          this.toggleSessionManager('all');
-        }
+        this.toggleSessionManager('all');
       });
     });
 
@@ -7746,7 +7742,9 @@ class CWMApp {
             statusDot = 'var(--overlay0)'; tristateAttr = '';
           }
         } else {
-          statusDot = s.status === 'running' ? 'var(--green)' : 'var(--overlay0)';
+          const _wsActive = s.status === 'running' && s.lastOutputAt && (Date.now() - s.lastOutputAt) < 5000;
+          statusDot = s.status !== 'running' ? 'var(--overlay0)' : (_wsActive ? 'var(--green)' : 'var(--yellow)');
+          if (s.status === 'running') tristateAttr = _wsActive ? ' data-tristate="busy"' : ' data-tristate="waiting"';
         }
         const timeStr = s.lastActive ? this.relativeTime(s.lastActive) : '';
         // Look up JSONL file size via resumeSessionId
@@ -8180,7 +8178,9 @@ class CWMApp {
 
     list.innerHTML = sessions.map(s => {
       const isSelected = this.state.selectedSession && this.state.selectedSession.id === s.id;
-      const statusClass = `status-dot-${s.status || 'stopped'}`;
+      const _sActive = s.status === 'running' && s.lastOutputAt && (Date.now() - s.lastOutputAt) < 5000;
+      const _sStatus = s.status === 'running' ? (_sActive ? 'running' : 'idle') : (s.status || 'stopped');
+      const statusClass = `status-dot-${_sStatus}`;
 
       // Build flags badges
       const flagBadges = [];
@@ -8236,21 +8236,24 @@ class CWMApp {
 
     this.els.detailPanel.hidden = false;
 
-    // Status dot
-    this.els.detailStatusDot.className = `detail-status-dot status-dot-${session.status || 'stopped'}`;
+    // Status dot — for running sessions, show active vs idle based on recent output
+    const _detailActive = session.status === 'running' && session.lastOutputAt && (Date.now() - session.lastOutputAt) < 5000;
+    const _detailStatus = session.status === 'running' ? (_detailActive ? 'running' : 'idle') : (session.status || 'stopped');
+    this.els.detailStatusDot.className = `detail-status-dot status-dot-${_detailStatus}`;
 
     // Title
     this.els.detailTitle.textContent = session.name;
 
     // Status badge
-    const status = session.status || 'stopped';
+    const status = _detailStatus;
+    const statusLabel = session.status === 'running' ? (_detailActive ? 'active' : 'idle') : status;
     const statusIcons = {
       running: '<span class="status-dot status-dot-running"></span>',
       stopped: '<span class="status-dot status-dot-stopped"></span>',
       error: '<span class="status-dot status-dot-error"></span>',
       idle: '<span class="status-dot status-dot-idle"></span>',
     };
-    this.els.detailStatusBadge.innerHTML = `<span class="status-badge status-badge-${status}">${statusIcons[status] || ''} ${status}</span>`;
+    this.els.detailStatusBadge.innerHTML = `<span class="status-badge status-badge-${status}">${statusIcons[status] || ''} ${statusLabel}</span>`;
 
     // Meta
     const ws = this.state.workspaces.find(w => w.id === session.workspaceId);
@@ -15252,13 +15255,18 @@ class CWMApp {
     if (!list) return;
 
     const allSessions = this.state.allSessions || [];
-    let filtered = allSessions;
+    const ACTIVE_THRESHOLD_MS = 5000;
+    const now = Date.now();
+    const isSessionActive = (s) => s.lastOutputAt && (now - s.lastOutputAt) < ACTIVE_THRESHOLD_MS;
+
+    // Always exclude stopped sessions
+    let filtered = allSessions.filter(s => s.status !== 'stopped');
 
     // Apply filter
-    if (this._smFilter === 'running') {
-      filtered = allSessions.filter(s => s.status === 'running');
-    } else if (this._smFilter === 'stopped') {
-      filtered = allSessions.filter(s => s.status !== 'running');
+    if (this._smFilter === 'active') {
+      filtered = filtered.filter(s => s.status === 'running' && isSessionActive(s));
+    } else if (this._smFilter === 'idle') {
+      filtered = filtered.filter(s => s.status === 'running' && !isSessionActive(s));
     }
 
     // Build workspace name lookup
@@ -15271,15 +15279,17 @@ class CWMApp {
       return;
     }
 
-    // Sort: running first, then by name
+    // Sort: active first, then idle, then by name
     filtered.sort((a, b) => {
-      if (a.status === 'running' && b.status !== 'running') return -1;
-      if (a.status !== 'running' && b.status === 'running') return 1;
+      const aActive = isSessionActive(a) ? 0 : 1;
+      const bActive = isSessionActive(b) ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
       return (a.name || '').localeCompare(b.name || '');
     });
 
     list.innerHTML = filtered.map(s => {
-      const statusClass = s.status === 'running' ? 'running' : (s.status === 'error' ? 'error' : 'stopped');
+      const active = isSessionActive(s);
+      const statusClass = s.status === 'error' ? 'error' : (active ? 'active' : 'idle');
       const wsName = wsMap[s.workspaceId] || '';
       const checked = this._smSelectedIds && this._smSelectedIds.has(s.id) ? 'checked' : '';
       const selectedClass = checked ? ' selected' : '';

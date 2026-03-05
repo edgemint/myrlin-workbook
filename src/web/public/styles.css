@@ -7883,6 +7883,8 @@ html {
 }
 
 .sm-status-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.sm-status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-green 1.2s ease-in-out infinite; }
+.sm-status-dot.idle { background: var(--yellow); box-shadow: 0 0 4px rgba(249, 226, 175, 0.4); }
 .sm-status-dot.stopped { background: var(--surface2); }
 .sm-status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
 

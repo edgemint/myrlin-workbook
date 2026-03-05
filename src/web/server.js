@@ -604,6 +604,18 @@ app.get('/api/sessions', requireAuth, (req, res) => {
       break;
   }
 
+  // Augment with live PTY activity data (lastOutputAt) if PTY manager is available
+  if (_ptyManager) {
+    const ptyMap = {};
+    for (const p of _ptyManager.listSessions()) {
+      ptyMap[p.sessionId] = p.lastOutputAt;
+    }
+    sessions = sessions.map(s => {
+      const lo = ptyMap[s.id];
+      return lo ? { ...s, lastOutputAt: lo } : s;
+    });
+  }
+
   return res.json({ sessions });
 });
 
