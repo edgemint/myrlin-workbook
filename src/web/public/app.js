@@ -3303,25 +3303,9 @@ class CWMApp {
       // New Claude session in this project directory
       items.push({
         label: 'New Session Here', icon: '&#9654;', action: async () => {
-          const emptySlot = this.terminalPanes.findIndex(p => p === null);
-          if (emptySlot === -1) {
-            this.showToast('All terminal panes full. Close one first.', 'warning');
-            return;
-          }
           try {
-            const payload = {
-              name: '', workingDir: projectPath, command: 'claude',
-              workspaceId: this.state.activeWorkspace?.id || null,
-            };
-            if (this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
-            const data = await this.api('POST', '/api/sessions', payload);
-            const session = data.session || data;
-            await this.loadSessions();
-            this.setViewMode('terminal');
-            this.openTerminalInPane(emptySlot, session.id, session.name, {
-              cwd: projectPath, command: 'claude', newSession: true,
-              ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
-            });
+            const workspaceId = this.state.activeWorkspace?.id || await this.findOrCreateWorkspaceForDir(projectPath);
+            await this.createSessionInDir(workspaceId, projectPath);
           } catch (err) {
             this.showToast(err.message || 'Failed to create session', 'error');
           }
@@ -3331,23 +3315,9 @@ class CWMApp {
       if (!this.state.settings.defaultBypassPermissions) {
         items.push({
           label: 'New Session (Bypass)', icon: '&#9888;', action: async () => {
-            const emptySlot = this.terminalPanes.findIndex(p => p === null);
-            if (emptySlot === -1) {
-              this.showToast('All terminal panes full. Close one first.', 'warning');
-              return;
-            }
             try {
-              const data = await this.api('POST', '/api/sessions', {
-                name: '', workingDir: projectPath, command: 'claude',
-                workspaceId: this.state.activeWorkspace?.id || null,
-                bypassPermissions: true,
-              });
-              const session = data.session || data;
-              await this.loadSessions();
-              this.setViewMode('terminal');
-              this.openTerminalInPane(emptySlot, session.id, session.name, {
-                cwd: projectPath, command: 'claude', bypassPermissions: true, newSession: true,
-              });
+              const workspaceId = this.state.activeWorkspace?.id || await this.findOrCreateWorkspaceForDir(projectPath);
+              await this.createSessionInDir(workspaceId, projectPath, { bypassPermissions: true });
             } catch (err) {
               this.showToast(err.message || 'Failed to create session', 'error');
             }
@@ -9002,9 +8972,10 @@ class CWMApp {
           if (projectJson) {
             try {
               const project = JSON.parse(projectJson);
+              const wsId = this.state.activeWorkspace?.id || await this.findOrCreateWorkspaceForDir(project.path);
               const payload = {
                 name: '', workingDir: project.path, command: 'claude',
-                workspaceId: this.state.activeWorkspace?.id || null,
+                workspaceId: wsId,
               };
               if (this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
               const data = await this.api('POST', '/api/sessions', payload);
