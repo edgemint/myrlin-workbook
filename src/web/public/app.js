@@ -565,32 +565,12 @@ class CWMApp {
       this.els.projectsAddPath.addEventListener('click', async () => {
         const dir = await this.showFolderBrowser('');
         if (!dir) return;
-        const dirParts = dir.replace(/\\/g, '/').split('/').filter(Boolean);
-        const projectName = dirParts[dirParts.length - 1] || 'project';
-        // Find or create a workspace for this directory
-        let workspaceId = null;
-        for (const ws of (this.state.workspaces || [])) {
-          const wsSessions = (this.state.allSessions || []).filter(s => s.workspaceId === ws.id);
-          if (wsSessions.some(s => s.workingDir && s.workingDir.replace(/\\/g, '/').toLowerCase() === dir.replace(/\\/g, '/').toLowerCase())) {
-            workspaceId = ws.id;
-            break;
-          }
+        try {
+          const workspaceId = await this.findOrCreateWorkspaceForDir(dir);
+          await this.createSessionInDir(workspaceId, dir);
+        } catch (err) {
+          this.showToast('Failed to create workspace: ' + (err.message || ''), 'error');
         }
-        if (!workspaceId) {
-          const nameMatch = (this.state.workspaces || []).find(ws => ws.name.toLowerCase() === projectName.toLowerCase());
-          if (nameMatch) workspaceId = nameMatch.id;
-        }
-        if (!workspaceId) {
-          try {
-            const wsData = await this.api('POST', '/api/workspaces', { name: projectName });
-            workspaceId = (wsData.workspace || wsData).id;
-            await this.loadWorkspaces();
-          } catch (err) {
-            this.showToast('Failed to create workspace: ' + (err.message || ''), 'error');
-            return;
-          }
-        }
-        await this.createSessionInDir(workspaceId, dir);
       });
     }
 
