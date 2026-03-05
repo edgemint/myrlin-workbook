@@ -444,12 +444,15 @@ class PtySessionManager {
           if (store.getSession(sessionId)) {
             store.updateSession(sessionId, { resumeSessionId: newUUID });
           }
-          // On first UUID detection, carry the store session's display name
+          // On first UUID detection, carry the store session's display name.
+          // Use 'manual' source only if the user explicitly named the session;
+          // otherwise 'auto' so terminal title changes can still override it.
           if (!oldUUID) {
             const storeSession = store.getSession(sessionId);
             if (storeSession && storeSession.name) {
-              store.setSessionName(newUUID, storeSession.name);
-              console.log(`[PTY] Synced store session name "${storeSession.name}" to first UUID ${newUUID}`);
+              const nameSource = storeSession.nameIsCustom ? 'manual' : 'auto';
+              store.setSessionName(newUUID, storeSession.name, nameSource);
+              console.log(`[PTY] Synced store session name "${storeSession.name}" to first UUID ${newUUID} (source: ${nameSource})`);
             }
           }
         } catch (_) {}

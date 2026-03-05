@@ -1330,7 +1330,7 @@ app.post('/api/sessions/:id/auto-title', requireAuth, (req, res) => {
     // ID (which happens when resumeSessionId is null and we fell back to req.params.id).
     // A store session ID will resolve via store.getSession(); a Claude UUID won't.
     if (!store.getSession(claudeSessionId)) {
-      store.setSessionName(claudeSessionId, title);
+      store.setSessionName(claudeSessionId, title, 'auto');
     }
     return res.json({ success: true, title, claudeSessionId });
   } catch (err) {

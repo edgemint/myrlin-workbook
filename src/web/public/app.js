@@ -2644,7 +2644,7 @@ class CWMApp {
     if (!result) return;
 
     try {
-      const data = await this.api('PUT', `/api/sessions/${id}`, result);
+      const data = await this.api('PUT', `/api/sessions/${id}`, { ...result, nameIsCustom: true });
       const updated = data.session || data;
       // Sync title to project sessions if this session links to a Claude UUID
       const claudeId = (updated && updated.resumeSessionId) || (session && session.resumeSessionId);
@@ -10839,7 +10839,7 @@ class CWMApp {
       if (newName && newName !== currentName) {
         try {
           if (isStoreSession) {
-            await this.api('PUT', `/api/sessions/${sessionId}`, { name: newName });
+            await this.api('PUT', `/api/sessions/${sessionId}`, { name: newName, nameIsCustom: true });
             const s = this.state.sessions.find(s => s.id === sessionId);
             if (s) s.name = newName;
             // Also update in allSessions
@@ -10923,7 +10923,7 @@ class CWMApp {
       if (newName && newName !== currentName) {
         try {
           if (isStoreSession) {
-            await this.api('PUT', `/api/sessions/${sessionId}`, { name: newName });
+            await this.api('PUT', `/api/sessions/${sessionId}`, { name: newName, nameIsCustom: true });
             // Update local state
             const s = this.state.sessions && this.state.sessions.find(s => s.id === sessionId);
             if (s) s.name = newName;
