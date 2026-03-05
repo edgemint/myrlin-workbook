@@ -1743,7 +1743,7 @@ class CWMApp {
     if (projList) {
       let projLPTimer = null;
 
-      projList.addEventListener('click', (e) => {
+      projList.addEventListener('click', async (e) => {
         const newSessionBtn = e.target.closest('.project-new-session-btn');
         if (newSessionBtn) {
           e.stopPropagation();
@@ -1758,21 +1758,29 @@ class CWMApp {
           e.stopPropagation();
           const sessName = sessionItem.dataset.sessionName;
           const projectPath = sessionItem.dataset.projectPath;
-          // Already open → redirect focus
-          if (this.focusPaneBySessionId(sessName)) {
+          // Already open → redirect focus (check by managed session ID if registered)
+          const existingManaged = (this.state.allSessions || []).find(s => s.resumeSessionId === sessName);
+          if (this.focusPaneBySessionId(existingManaged ? existingManaged.id : sessName)) {
             this.showToast('Focused existing session', 'info');
             return;
           }
-          // Not open → open in next empty pane
+          // Not open → register session then open in next empty pane
           const emptySlot = this.terminalPanes.findIndex(p => p === null);
           if (emptySlot !== -1) {
-            this.openTerminalInPane(emptySlot, sessName, sessName, {
-              cwd: projectPath,
-              resumeSessionId: sessName,
-              command: 'claude',
-            });
-            this.setViewMode('terminal');
-            this.renderProjects();
+            try {
+              const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+              const fallbackName = dirParts[dirParts.length - 1] || sessName;
+              const session = await this.ensureSessionRegistered(sessName, fallbackName, projectPath);
+              this.openTerminalInPane(emptySlot, session.id, session.name, {
+                cwd: projectPath,
+                resumeSessionId: sessName,
+                command: 'claude',
+              });
+              this.setViewMode('terminal');
+              this.renderProjects();
+            } catch (err) {
+              this.showToast(err.message || 'Failed to open session', 'error');
+            }
           } else {
             this.showToast('All panes are occupied — close one first', 'warning');
           }
