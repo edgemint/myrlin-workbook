@@ -1770,6 +1770,7 @@ class CWMApp {
                 cwd: projectPath,
                 resumeSessionId: sessName,
                 command: 'claude',
+                ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
               });
               this.setViewMode('terminal');
               this.renderProjects();
@@ -3304,39 +3305,55 @@ class CWMApp {
 
       // New Claude session in this project directory
       items.push({
-        label: 'New Session Here', icon: '&#9654;', action: () => {
+        label: 'New Session Here', icon: '&#9654;', action: async () => {
           const emptySlot = this.terminalPanes.findIndex(p => p === null);
           if (emptySlot === -1) {
             this.showToast('All terminal panes full. Close one first.', 'warning');
             return;
           }
-          const sid = 'proj-' + Date.now().toString(36);
-          this.setViewMode('terminal');
-          this.openTerminalInPane(emptySlot, sid, '', {
-            cwd: projectPath,
-            command: 'claude',
-            newSession: true,
-            ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
-          });
+          try {
+            const payload = {
+              name: '', workingDir: projectPath, command: 'claude',
+              workspaceId: this.state.activeWorkspace?.id || null,
+            };
+            if (this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
+            const data = await this.api('POST', '/api/sessions', payload);
+            const session = data.session || data;
+            await this.loadSessions();
+            this.setViewMode('terminal');
+            this.openTerminalInPane(emptySlot, session.id, session.name, {
+              cwd: projectPath, command: 'claude', newSession: true,
+              ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
+            });
+          } catch (err) {
+            this.showToast(err.message || 'Failed to create session', 'error');
+          }
         },
       });
 
       if (!this.state.settings.defaultBypassPermissions) {
         items.push({
-          label: 'New Session (Bypass)', icon: '&#9888;', action: () => {
+          label: 'New Session (Bypass)', icon: '&#9888;', action: async () => {
             const emptySlot = this.terminalPanes.findIndex(p => p === null);
             if (emptySlot === -1) {
               this.showToast('All terminal panes full. Close one first.', 'warning');
               return;
             }
-            const sid = 'proj-' + Date.now().toString(36);
-            this.setViewMode('terminal');
-            this.openTerminalInPane(emptySlot, sid, '', {
-              cwd: projectPath,
-              command: 'claude',
-              bypassPermissions: true,
-              newSession: true,
-            });
+            try {
+              const data = await this.api('POST', '/api/sessions', {
+                name: '', workingDir: projectPath, command: 'claude',
+                workspaceId: this.state.activeWorkspace?.id || null,
+                bypassPermissions: true,
+              });
+              const session = data.session || data;
+              await this.loadSessions();
+              this.setViewMode('terminal');
+              this.openTerminalInPane(emptySlot, session.id, session.name, {
+                cwd: projectPath, command: 'claude', bypassPermissions: true, newSession: true,
+              });
+            } catch (err) {
+              this.showToast(err.message || 'Failed to create session', 'error');
+            }
           },
         });
       }
@@ -8967,17 +8984,23 @@ class CWMApp {
             return;
           }
 
-          // Drop an entire project into terminal pane
-          // Opens a new Claude session in the project dir WITHOUT adding to workspace
+          // Drop an entire project into terminal pane - registers a managed session
           const projectJson = e.dataTransfer.getData('cwm/project');
           if (projectJson) {
             try {
               const project = JSON.parse(projectJson);
-              const tempId = 'pty-project-' + Date.now();
+              const payload = {
+                name: '', workingDir: project.path, command: 'claude',
+                workspaceId: this.state.activeWorkspace?.id || null,
+              };
+              if (this.state.settings.defaultBypassPermissions) payload.bypassPermissions = true;
+              const data = await this.api('POST', '/api/sessions', payload);
+              const session = data.session || data;
+              await this.loadSessions();
               const spawnOpts = { cwd: project.path, command: 'claude', newSession: true };
               if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-              this.openTerminalInPane(slotIdx, tempId, '', spawnOpts);
-              this.showToast('Opening project - drag to a project to save it', 'info');
+              this.openTerminalInPane(slotIdx, session.id, session.name, spawnOpts);
+              this.showToast('Opening project', 'info');
             } catch (err) {
               this.showToast(err.message || 'Failed to open project', 'error');
             }
