@@ -663,6 +663,9 @@ class TerminalPane {
     // Notify server of new dimensions
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'resize', cols: this.term.cols, rows: this.term.rows }));
+      // Record when we last sent a resize so _trackActivityForCompletion can
+      // ignore the PTY repaint that follows — it's not new Claude output.
+      this._lastResizeTime = Date.now();
     }
   }
 
@@ -1116,8 +1119,17 @@ class TerminalPane {
     }
     if (!this._isWorking) {
       this._isWorking = true;
-      // New work started after being idle -- allow the next idle event to fire
-      this._idleNotified = false;
+      // New work started after being idle -- allow the next idle event to fire.
+      // Exception: PTY sends a full-screen repaint after a terminal resize (e.g.
+      // when the user navigates to this pane). That repaint is indistinguishable
+      // from real output but contains only the existing idle prompt. If we reset
+      // _idleNotified here, the idle event fires again once the debounce settles,
+      // causing ping-pong between two idle terminals when the user "goes to" them.
+      // Guard: skip the reset when data arrives within 1 second of a resize send.
+      const msSinceResize = Date.now() - (this._lastResizeTime || 0);
+      if (msSinceResize > 1000) {
+        this._idleNotified = false;
+      }
     }
     // Debounced idle check - if no output for 2 seconds after burst, check for prompt
     clearTimeout(this._idleCheckTimer);
