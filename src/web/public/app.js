@@ -2729,6 +2729,28 @@ class CWMApp {
     }
   }
 
+  async moveFolderGroupToWorkspace(dir, srcWsId, targetWsId) {
+    if (srcWsId === targetWsId) return;
+    const all = this.state.allSessions || this.state.sessions;
+    const sessions = all.filter(s => s.workspaceId === srcWsId && s.workingDir === dir);
+    if (sessions.length === 0) return;
+    const targetWs = this.state.workspaces.find(w => w.id === targetWsId);
+
+    try {
+      for (const s of sessions) {
+        await this.api('PUT', `/api/sessions/${s.id}`, { workspaceId: targetWsId });
+        s.workspaceId = targetWsId;
+        const allSession = this.state.allSessions && this.state.allSessions.find(a => a.id === s.id);
+        if (allSession && allSession !== s) allSession.workspaceId = targetWsId;
+      }
+      this.renderWorkspaces();
+      this.renderSessions();
+      this.showToast(`Moved ${sessions.length} session${sessions.length !== 1 ? 's' : ''} to "${targetWs ? targetWs.name : 'workspace'}"`, 'success');
+    } catch (err) {
+      this.showToast('Failed to move sessions: ' + (err.message || ''), 'error');
+    }
+  }
+
   async removeSessionFromWorkspace(sessionId) {
     const session = (this.state.allSessions || this.state.sessions).find(s => s.id === sessionId);
     if (!session) return;
