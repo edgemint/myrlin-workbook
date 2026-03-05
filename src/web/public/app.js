@@ -3110,37 +3110,61 @@ class CWMApp {
 
     // Open in terminal (resume the Claude session) - no workspace needed
     items.push({
-      label: 'Open in Terminal', icon: '&#9654;', action: () => {
+      label: 'Open in Terminal', icon: '&#9654;', action: async () => {
+        const existingManaged = (this.state.allSessions || []).find(s => s.resumeSessionId === sessionName);
+        if (this.focusPaneBySessionId(existingManaged ? existingManaged.id : sessionName)) {
+          this.showToast('Focused existing session', 'info');
+          return;
+        }
         const emptySlot = this.terminalPanes.findIndex(p => p === null);
         if (emptySlot === -1) {
           this.showToast('All terminal panes full. Close one first.', 'warning');
           return;
         }
-        this.setViewMode('terminal');
-        this.openTerminalInPane(emptySlot, sessionName, sessionName, {
-          cwd: projectPath,
-          resumeSessionId: sessionName,
-          command: 'claude',
-          ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
-        });
+        try {
+          const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+          const fallbackName = dirParts[dirParts.length - 1] || sessionName;
+          const session = await this.ensureSessionRegistered(sessionName, fallbackName, projectPath);
+          this.openTerminalInPane(emptySlot, session.id, session.name, {
+            cwd: projectPath,
+            resumeSessionId: sessionName,
+            command: 'claude',
+            ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
+          });
+          this.setViewMode('terminal');
+        } catch (err) {
+          this.showToast(err.message || 'Failed to open session', 'error');
+        }
       },
     });
 
     if (!this.state.settings.defaultBypassPermissions) {
       items.push({
-        label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
+        label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: async () => {
+          const existingManaged = (this.state.allSessions || []).find(s => s.resumeSessionId === sessionName);
+          if (this.focusPaneBySessionId(existingManaged ? existingManaged.id : sessionName)) {
+            this.showToast('Focused existing session', 'info');
+            return;
+          }
           const emptySlot = this.terminalPanes.findIndex(p => p === null);
           if (emptySlot === -1) {
             this.showToast('All terminal panes full. Close one first.', 'warning');
             return;
           }
-          this.setViewMode('terminal');
-          this.openTerminalInPane(emptySlot, sessionName, sessionName, {
-            cwd: projectPath,
-            resumeSessionId: sessionName,
-            command: 'claude',
-            bypassPermissions: true,
-          });
+          try {
+            const dirParts = (projectPath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+            const fallbackName = dirParts[dirParts.length - 1] || sessionName;
+            const session = await this.ensureSessionRegistered(sessionName, fallbackName, projectPath);
+            this.openTerminalInPane(emptySlot, session.id, session.name, {
+              cwd: projectPath,
+              resumeSessionId: sessionName,
+              command: 'claude',
+              bypassPermissions: true,
+            });
+            this.setViewMode('terminal');
+          } catch (err) {
+            this.showToast(err.message || 'Failed to open session', 'error');
+          }
         },
       });
     }
