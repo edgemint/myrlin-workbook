@@ -308,6 +308,7 @@ class CWMApp {
 
       // Projects
       projectsList: document.getElementById('projects-list'),
+      projectsAddPath: document.getElementById('projects-add-path'),
       projectsRefresh: document.getElementById('projects-refresh'),
       projectsToggle: document.getElementById('projects-toggle'),
       projectsSearchInput: document.getElementById('projects-search-input'),
@@ -555,6 +556,15 @@ class CWMApp {
         this.loadSessions();
         this.loadStats();
         this.showToast('Refreshing projects...', 'info');
+      });
+    }
+
+    // Projects add path - open folder browser and create a new session in the selected dir
+    if (this.els.projectsAddPath) {
+      this.els.projectsAddPath.addEventListener('click', async () => {
+        const dir = await this.showFolderBrowser('');
+        if (!dir) return;
+        await this.createSessionInDir(null, dir);
       });
     }
 
