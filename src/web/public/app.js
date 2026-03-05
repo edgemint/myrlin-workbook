@@ -1556,6 +1556,7 @@ class CWMApp {
       }
       const projectGroupHeader = e.target.closest('.ws-project-group-header');
       if (projectGroupHeader) {
+        e.stopPropagation();
         const dir = projectGroupHeader.dataset.dir;
         const wsId = projectGroupHeader.dataset.wsId;
         e.dataTransfer.setData('cwm/project-group', JSON.stringify({ dir, wsId }));
@@ -2750,8 +2751,11 @@ class CWMApp {
     const targetWs = this.state.workspaces.find(w => w.id === targetWsId);
 
     try {
+      await Promise.all(sessions.map(s =>
+        this.api('PUT', `/api/sessions/${s.id}`, { workspaceId: targetWsId })
+      ));
+      // All succeeded — now mutate state
       for (const s of sessions) {
-        await this.api('PUT', `/api/sessions/${s.id}`, { workspaceId: targetWsId });
         s.workspaceId = targetWsId;
         const allSession = this.state.allSessions && this.state.allSessions.find(a => a.id === s.id);
         if (allSession && allSession !== s) allSession.workspaceId = targetWsId;
