@@ -11248,7 +11248,9 @@ class CWMApp {
     if (group && group.panes && group.panes.length > 0) {
       group.panes.forEach(p => {
         if (p.sessionId) {
-          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || 'Terminal', p.spawnOpts || {});
+          const restoreOpts = Object.assign({}, p.spawnOpts || {});
+          if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
+          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || 'Terminal', restoreOpts);
         }
       });
     }
