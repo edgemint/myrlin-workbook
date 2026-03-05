@@ -8216,7 +8216,7 @@ class CWMApp {
       this.els.detailTitle.textContent = session.name;
       this.els.detailTitle.classList.remove('session-name-empty');
     } else {
-      this.els.detailTitle.textContent = 'untitled';
+      this.els.detailTitle.textContent = '';
       this.els.detailTitle.classList.add('session-name-empty');
     }
 
@@ -9172,7 +9172,7 @@ class CWMApp {
         titleEl.textContent = sessionName;
         titleEl.classList.remove('session-name-empty');
       } else {
-        titleEl.textContent = 'untitled';
+        titleEl.textContent = '';
         titleEl.classList.add('session-name-empty');
       }
     }
