@@ -1508,7 +1508,7 @@ class CWMApp {
         const shortDir = parts.slice(-2).join('/');
         this._renderContextItems(shortDir, [
           { label: 'New Session Here', icon: '&#9654;', action: () => this.createSessionInDir(wsId, dir) },
-          { label: 'New Session (Bypass)', icon: '&#9888;', action: () => this.createSessionInDir(wsId, dir, { bypassPermissions: true }) },
+          ...(!this.state.settings.defaultBypassPermissions ? [{ label: 'New Session (Bypass)', icon: '&#9888;', action: () => this.createSessionInDir(wsId, dir, { bypassPermissions: true }) }] : []),
         ], e.clientX, e.clientY);
         return;
       }
@@ -2842,13 +2842,13 @@ class CWMApp {
     if (!isRunning) {
       items.push(
         { label: 'Start', icon: '&#9654;', action: () => this.startSession(sessionId) },
-        { label: 'Start (Bypass)', icon: '&#9888;', action: () => this.startSessionWithFlags(sessionId, { bypassPermissions: true }) },
+        ...(!this.state.settings.defaultBypassPermissions ? [{ label: 'Start (Bypass)', icon: '&#9888;', action: () => this.startSessionWithFlags(sessionId, { bypassPermissions: true }) }] : []),
       );
     } else {
       items.push(
         { label: 'Stop', icon: '&#9632;', action: () => this.stopSession(sessionId) },
         { label: 'Restart', icon: '&#8635;', action: () => this.restartSession(sessionId) },
-        { label: 'Restart (Bypass)', icon: '&#9888;', action: () => this.restartSessionWithFlags(sessionId, { bypassPermissions: true }) },
+        ...(!this.state.settings.defaultBypassPermissions ? [{ label: 'Restart (Bypass)', icon: '&#9888;', action: () => this.restartSessionWithFlags(sessionId, { bypassPermissions: true }) }] : []),
       );
     }
 
@@ -2936,7 +2936,7 @@ class CWMApp {
     // Advanced submenu — templates, context, refocus, worktrees
     const advancedItems = [
       { label: 'Start with Context', action: () => this.startSessionWithContext(sessionId) },
-      { label: 'Start with Context (Bypass)', action: () => this.startSessionWithContext(sessionId, { bypassPermissions: true }) },
+      ...(!this.state.settings.defaultBypassPermissions ? [{ label: 'Start with Context (Bypass)', action: () => this.startSessionWithContext(sessionId, { bypassPermissions: true }) }] : []),
       { label: 'Save as Template', action: () => this.saveSessionAsTemplate(session) },
       { label: 'Reset & Refocus', action: () => this.refocusSession(sessionId, 'reset') },
       { label: 'Compact & Refocus', action: () => this.refocusSession(sessionId, 'compact') },
@@ -3007,25 +3007,27 @@ class CWMApp {
       },
     });
 
-    items.push({
-      label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
-        const emptySlot = this.terminalPanes.findIndex(p => p === null);
-        if (emptySlot !== -1) {
-          this.setViewMode('terminal');
-          const spawnOpts = {};
-          if (session.resumeSessionId) spawnOpts.resumeSessionId = session.resumeSessionId;
-          if (session.workingDir) spawnOpts.cwd = session.workingDir;
-          if (session.command) spawnOpts.command = session.command;
-          spawnOpts.bypassPermissions = true;
-          if (session.verbose) spawnOpts.verbose = true;
-          if (session.model) spawnOpts.model = session.model;
-          if (session.agentTeams) spawnOpts.agentTeams = true;
-          this.openTerminalInPane(emptySlot, sessionId, session.name, spawnOpts);
-        } else {
-          this.showToast('All terminal panes full. Close one first.', 'warning');
-        }
-      },
-    });
+    if (!this.state.settings.defaultBypassPermissions) {
+      items.push({
+        label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
+          const emptySlot = this.terminalPanes.findIndex(p => p === null);
+          if (emptySlot !== -1) {
+            this.setViewMode('terminal');
+            const spawnOpts = {};
+            if (session.resumeSessionId) spawnOpts.resumeSessionId = session.resumeSessionId;
+            if (session.workingDir) spawnOpts.cwd = session.workingDir;
+            if (session.command) spawnOpts.command = session.command;
+            spawnOpts.bypassPermissions = true;
+            if (session.verbose) spawnOpts.verbose = true;
+            if (session.model) spawnOpts.model = session.model;
+            if (session.agentTeams) spawnOpts.agentTeams = true;
+            this.openTerminalInPane(emptySlot, sessionId, session.name, spawnOpts);
+          } else {
+            this.showToast('All terminal panes full. Close one first.', 'warning');
+          }
+        },
+      });
+    }
 
     items.push({ type: 'sep' });
 
@@ -3112,22 +3114,24 @@ class CWMApp {
       },
     });
 
-    items.push({
-      label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
-        const emptySlot = this.terminalPanes.findIndex(p => p === null);
-        if (emptySlot === -1) {
-          this.showToast('All terminal panes full. Close one first.', 'warning');
-          return;
-        }
-        this.setViewMode('terminal');
-        this.openTerminalInPane(emptySlot, sessionName, sessionName, {
-          cwd: projectPath,
-          resumeSessionId: sessionName,
-          command: 'claude',
-          bypassPermissions: true,
-        });
-      },
-    });
+    if (!this.state.settings.defaultBypassPermissions) {
+      items.push({
+        label: 'Open in Terminal (Bypass)', icon: '&#9888;', action: () => {
+          const emptySlot = this.terminalPanes.findIndex(p => p === null);
+          if (emptySlot === -1) {
+            this.showToast('All terminal panes full. Close one first.', 'warning');
+            return;
+          }
+          this.setViewMode('terminal');
+          this.openTerminalInPane(emptySlot, sessionName, sessionName, {
+            cwd: projectPath,
+            resumeSessionId: sessionName,
+            command: 'claude',
+            bypassPermissions: true,
+          });
+        },
+      });
+    }
 
     // Add to active workspace (without opening terminal)
     items.push({
@@ -3157,33 +3161,35 @@ class CWMApp {
         });
       },
     });
-    items.push({
-      label: 'Add to Project (Bypass)', icon: '&#9888;', action: () => {
-        if (!this.state.activeWorkspace) {
-          this.showToast('Select or create a project first', 'warning');
-          return;
-        }
-        const projectName = projectPath ? projectPath.split('\\').pop() || projectPath.split('/').pop() || sessionName : sessionName;
-        const shortId = sessionName.length > 8 ? sessionName.substring(0, 8) : sessionName;
-        const friendlyName = projectName + ' (' + shortId + ')';
-        this.api('POST', '/api/sessions', {
-          name: friendlyName,
-          workspaceId: this.state.activeWorkspace.id,
-          workingDir: projectPath,
-          topic: 'Resumed session',
-          command: 'claude',
-          resumeSessionId: sessionName,
-          bypassPermissions: true,
-        }).then(async () => {
-          await this.loadSessions();
-          await this.loadStats();
-          this.renderWorkspaces();
-          this.showToast(`Session added to ${this.state.activeWorkspace.name} (bypass on)`, 'success');
-        }).catch(err => {
-          this.showToast(err.message || 'Failed to add session', 'error');
-        });
-      },
-    });
+    if (!this.state.settings.defaultBypassPermissions) {
+      items.push({
+        label: 'Add to Project (Bypass)', icon: '&#9888;', action: () => {
+          if (!this.state.activeWorkspace) {
+            this.showToast('Select or create a project first', 'warning');
+            return;
+          }
+          const projectName = projectPath ? projectPath.split('\\').pop() || projectPath.split('/').pop() || sessionName : sessionName;
+          const shortId = sessionName.length > 8 ? sessionName.substring(0, 8) : sessionName;
+          const friendlyName = projectName + ' (' + shortId + ')';
+          this.api('POST', '/api/sessions', {
+            name: friendlyName,
+            workspaceId: this.state.activeWorkspace.id,
+            workingDir: projectPath,
+            topic: 'Resumed session',
+            command: 'claude',
+            resumeSessionId: sessionName,
+            bypassPermissions: true,
+          }).then(async () => {
+            await this.loadSessions();
+            await this.loadStats();
+            this.renderWorkspaces();
+            this.showToast(`Session added to ${this.state.activeWorkspace.name} (bypass on)`, 'success');
+          }).catch(err => {
+            this.showToast(err.message || 'Failed to add session', 'error');
+          });
+        },
+      });
+    }
 
     items.push({ type: 'sep' });
 
@@ -3294,31 +3300,35 @@ class CWMApp {
         },
       });
 
-      items.push({
-        label: 'New Session (Bypass)', icon: '&#9888;', action: () => {
-          const emptySlot = this.terminalPanes.findIndex(p => p === null);
-          if (emptySlot === -1) {
-            this.showToast('All terminal panes full. Close one first.', 'warning');
-            return;
-          }
-          const sid = 'proj-' + Date.now().toString(36);
-          this.setViewMode('terminal');
-          this.openTerminalInPane(emptySlot, sid, displayName, {
-            cwd: projectPath,
-            command: 'claude',
-            bypassPermissions: true,
-            newSession: true,
-          });
-        },
-      });
+      if (!this.state.settings.defaultBypassPermissions) {
+        items.push({
+          label: 'New Session (Bypass)', icon: '&#9888;', action: () => {
+            const emptySlot = this.terminalPanes.findIndex(p => p === null);
+            if (emptySlot === -1) {
+              this.showToast('All terminal panes full. Close one first.', 'warning');
+              return;
+            }
+            const sid = 'proj-' + Date.now().toString(36);
+            this.setViewMode('terminal');
+            this.openTerminalInPane(emptySlot, sid, displayName, {
+              cwd: projectPath,
+              command: 'claude',
+              bypassPermissions: true,
+              newSession: true,
+            });
+          },
+        });
+      }
 
       // Start a new session with project context pre-injected
       items.push({
         label: 'Start with Context', icon: '&#128218;', action: () => this.startProjectWithContext(projectPath),
       });
-      items.push({
-        label: 'Start with Context (Bypass)', icon: '&#9888;', action: () => this.startProjectWithContext(projectPath, { bypassPermissions: true }),
-      });
+      if (!this.state.settings.defaultBypassPermissions) {
+        items.push({
+          label: 'Start with Context (Bypass)', icon: '&#9888;', action: () => this.startProjectWithContext(projectPath, { bypassPermissions: true }),
+        });
+      }
     }
 
     // Set default directory for new sessions
@@ -7884,7 +7894,7 @@ class CWMApp {
           }
         }).catch(err => this.showToast(err.message, 'error'));
       }},
-      { label: 'Open Terminal (Bypass)', icon: '&#9888;', action: () => {
+      ...(!this.state.settings.defaultBypassPermissions ? [{ label: 'Open Terminal (Bypass)', icon: '&#9888;', action: () => {
         const emptySlot = this.terminalPanes.findIndex(p => p === null);
         if (emptySlot === -1) { this.showToast('All terminal panes full', 'warning'); return; }
         this.api('POST', '/api/sessions', { name: `${ws.name} terminal`, workspaceId, bypassPermissions: true }).then(data => {
@@ -7894,7 +7904,7 @@ class CWMApp {
             this.openTerminalInPane(emptySlot, data.session.id, ws.name, { bypassPermissions: true });
           }
         }).catch(err => this.showToast(err.message, 'error'));
-      }},
+      }}] : []),
       { label: 'View Docs', icon: '&#128196;', action: () => {
         this.selectWorkspace(workspaceId);
         this.setViewMode('docs');
