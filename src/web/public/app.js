@@ -9578,9 +9578,19 @@ class CWMApp {
 
   /**
    * Close a terminal pane and always kill the underlying PTY process.
+   * Shows a confirmation modal if the session is actively working.
    */
   async closeTerminalPaneOrKill(slotIdx) {
     const tp = this.terminalPanes[slotIdx];
+    if (tp && tp._isWorking) {
+      const confirmed = await this.showConfirmModal({
+        title: 'Kill active session?',
+        message: 'This session is currently active. Are you sure you want to kill it?',
+        confirmText: 'Kill',
+        confirmClass: 'btn-danger',
+      });
+      if (!confirmed) return;
+    }
     if (tp && tp.sessionId) {
       try {
         await this.api('POST', `/api/pty/${encodeURIComponent(tp.sessionId)}/kill`);
