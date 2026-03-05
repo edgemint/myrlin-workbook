@@ -7367,6 +7367,87 @@ class CWMApp {
     setTimeout(() => this.dismissToast(toast), 60000);
   }
 
+  /**
+   * Show a toast with an additional action button.
+   * @param {string} message - Toast body text
+   * @param {'info'|'success'|'warning'|'error'} level - Severity
+   * @param {string} actionLabel - Button label (e.g. "Go to session")
+   * @param {Function} onAction - Called when the action button is clicked
+   */
+  showActionToast(message, level = 'info', actionLabel = 'Go', onAction = null) {
+    const icons = {
+      info: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 8v4M9 6v.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+      success: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6 9.5l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      warning: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2l7.5 13H1.5L9 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 7.5v3M9 12.5v.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+      error: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.5l5 5M11.5 6.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${level}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[level] || icons.info}</span>
+      <span class="toast-message">${this.escapeHtml(message)}</span>
+      ${onAction ? `<button class="toast-action" type="button">${this.escapeHtml(actionLabel)}</button>` : ''}
+      <button class="toast-close" aria-label="Dismiss">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    `;
+
+    toast.querySelector('.toast-close').addEventListener('click', () => this.dismissToast(toast));
+
+    if (onAction) {
+      toast.querySelector('.toast-action').addEventListener('click', () => {
+        onAction();
+        this.dismissToast(toast);
+      });
+    }
+
+    // Swipe-to-dismiss: drag right to remove
+    let startX = 0, currentX = 0, dragging = false;
+    const closeBtn = toast.querySelector('.toast-close');
+    const actionBtn = toast.querySelector('.toast-action');
+    const onPointerDown = (e) => {
+      if (closeBtn && closeBtn.contains(e.target)) return;
+      if (actionBtn && actionBtn.contains(e.target)) return;
+      startX = e.clientX;
+      currentX = 0;
+      dragging = true;
+      toast.classList.add('toast-dragging');
+      toast.setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e) => {
+      if (!dragging) return;
+      currentX = e.clientX - startX;
+      if (currentX > 0) toast.style.transform = `translateX(${currentX}px)`;
+    };
+    const onPointerUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      toast.classList.remove('toast-dragging');
+      toast.style.transform = '';
+      if (currentX > 80) {
+        toast.classList.add('toast-swipe-exit');
+        setTimeout(() => toast.remove(), 200);
+      }
+    };
+    toast.addEventListener('pointerdown', onPointerDown);
+    toast.addEventListener('pointermove', onPointerMove);
+    toast.addEventListener('pointerup', onPointerUp);
+    toast.addEventListener('pointercancel', onPointerUp);
+
+    const container = document.querySelector('.toast-container');
+    if (container) container.appendChild(toast);
+
+    // Auto-dismiss after 8 seconds (longer than plain toast to give time to click)
+    setTimeout(() => {
+      if (toast.parentNode) this.dismissToast(toast);
+    }, 8000);
+
+    return toast;
+  }
+
   dismissToast(toast) {
     if (!toast.parentNode) return;
     toast.classList.add('toast-exit');
