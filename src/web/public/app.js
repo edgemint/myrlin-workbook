@@ -3002,7 +3002,7 @@ class CWMApp {
           if (session.resumeSessionId) spawnOpts.resumeSessionId = session.resumeSessionId;
           if (session.workingDir) spawnOpts.cwd = session.workingDir;
           if (session.command) spawnOpts.command = session.command;
-          if (session.bypassPermissions) spawnOpts.bypassPermissions = true;
+          if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
           if (session.verbose) spawnOpts.verbose = true;
           if (session.model) spawnOpts.model = session.model;
           if (session.agentTeams) spawnOpts.agentTeams = true;
@@ -4908,7 +4908,7 @@ class CWMApp {
             const emptySlot = this.terminalPanes.findIndex(p => p === null);
             if (emptySlot !== -1) {
               this.setViewMode('terminal');
-              this.openTerminalInPane(emptySlot, task.sessionId, task.branch, { cwd: task.worktreePath });
+              this.openTerminalInPane(emptySlot, task.sessionId, task.branch, { cwd: task.worktreePath, ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}) });
             }
           }
         }
@@ -5617,6 +5617,7 @@ class CWMApp {
               cwd: data.task.worktreePath,
               ...(model ? { model } : {}),
               ...(flags.length > 0 ? { flags } : {}),
+              ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
             });
           }
         }
@@ -5984,6 +5985,7 @@ class CWMApp {
               if (emptySlot !== -1) {
                 this.openTerminalInPane(emptySlot, item.session.id, item.task.branch || item.session.name, {
                   cwd: item.task.worktreePath,
+                  ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
                 });
               }
             }
@@ -8851,6 +8853,7 @@ class CWMApp {
         cwd: projectPath,
         resumeSessionId: sessionId,
         command: 'claude',
+        ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
       });
       this.showToast('Opening conversation in terminal', 'info');
     } catch (err) {
@@ -9496,7 +9499,7 @@ class CWMApp {
     this._renderContextItems(tp.sessionName || 'Terminal', items, x, y);
   }
 
-  closeTerminalPane(slotIdx) {
+  closeTerminalPane(slotIdx, showBackgroundToast = false) {
     const tp = this.terminalPanes[slotIdx];
     const sessionName = tp ? tp.sessionName : '';
 
@@ -9551,25 +9554,31 @@ class CWMApp {
       this.renderWorkspaces();
     }
 
-    if (sessionName) {
+    if (showBackgroundToast && sessionName) {
       this.showToast(`"${sessionName}" moved to background - drag it back to reconnect`, 'info');
     }
   }
 
   /**
-   * Close a terminal pane. If the session is idle (not actively working),
-   * kill the underlying PTY process instead of leaving it in the background.
+   * Move a terminal pane to the background without killing the PTY.
+   */
+  minimizeTerminalPane(slotIdx) {
+    this.closeTerminalPane(slotIdx, true);
+  }
+
+  /**
+   * Close a terminal pane and always kill the underlying PTY process.
    */
   async closeTerminalPaneOrKill(slotIdx) {
     const tp = this.terminalPanes[slotIdx];
-    if (tp && tp.sessionId && !tp._isWorking) {
+    if (tp && tp.sessionId) {
       try {
         await this.api('POST', `/api/pty/${encodeURIComponent(tp.sessionId)}/kill`);
       } catch (_) {
         // Session may already be dead; proceed with closing the pane
       }
     }
-    this.closeTerminalPane(slotIdx);
+    this.closeTerminalPane(slotIdx, false);
   }
 
   /**
@@ -10674,7 +10683,10 @@ class CWMApp {
                 this.showToast('All terminal panes full', 'warning');
                 return;
               }
-              this.openTerminalInPane(emptySlot, s.id, s.name);
+              const spawnOpts = {};
+              if (s.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
+              if (s.workingDir) spawnOpts.cwd = s.workingDir;
+              this.openTerminalInPane(emptySlot, s.id, s.name, spawnOpts);
             },
           }));
         if (sessionItems.length === 0) {
@@ -14365,7 +14377,7 @@ class CWMApp {
               this.setViewMode('terminal');
               const spawnOpts = { cwd: session.workingDir || '' };
               if (session.model) spawnOpts.model = session.model;
-              if (session.bypassPermissions) spawnOpts.bypassPermissions = true;
+              if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
               this.openTerminalInPane(emptySlot, newSession.id, newSession.name, spawnOpts);
 
               // After a short delay, send the context markdown as the first message
@@ -15447,7 +15459,7 @@ class CWMApp {
     // Open terminal
     const spawnOpts = {};
     if (session.workingDir) spawnOpts.cwd = session.workingDir;
-    if (session.bypassPermissions) spawnOpts.bypassPermissions = true;
+    if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
     if (session.agentTeams) spawnOpts.agentTeams = true;
 
     this.setViewMode('terminal');
