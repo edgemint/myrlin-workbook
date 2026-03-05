@@ -4813,7 +4813,14 @@ html.activity-indicators-disabled .terminal-pane-activity {
   border-radius: 4px;
   outline: none;
   width: 100%;
+  box-sizing: border-box;
   box-shadow: 0 0 0 2px rgba(203, 166, 247, 0.2);
+}
+
+/* While renaming a pane title, suppress text-overflow so the input is fully visible */
+.terminal-pane-title:has(.inline-rename-input) {
+  text-overflow: clip;
+  overflow: visible;
 }
 
 .ws-session-item .ws-session-name,

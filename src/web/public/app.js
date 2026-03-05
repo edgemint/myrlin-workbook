@@ -11247,7 +11247,10 @@ class CWMApp {
    * TerminalPane instance and syncs globally.
    */
   startTerminalPaneRename(nameEl, slotIdx, sessionId, isStoreSession) {
+    const wasEmpty = nameEl.classList.contains('session-name-empty');
     const currentName = nameEl.textContent;
+    // Remove empty class so ::before "untitled" hint doesn't overlay the input
+    nameEl.classList.remove('session-name-empty');
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'inline-rename-input';
@@ -11256,6 +11259,10 @@ class CWMApp {
     nameEl.appendChild(input);
     input.focus();
     input.select();
+
+    const restoreEmpty = () => {
+      if (wasEmpty) nameEl.classList.add('session-name-empty');
+    };
 
     let committed = false;
     const commit = async () => {
@@ -11292,10 +11299,12 @@ class CWMApp {
           this.renderProjects();
         } catch (err) {
           nameEl.textContent = currentName;
+          restoreEmpty();
           this.showToast('Rename failed: ' + (err.message || ''), 'error');
         }
       } else {
         nameEl.textContent = currentName;
+        restoreEmpty();
       }
     };
 
