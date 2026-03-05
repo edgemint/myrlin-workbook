@@ -1048,6 +1048,16 @@ class CWMApp {
         e.preventDefault();
         if (this.state.authRequired !== false || this.state.token) this.openSettings();
       }
+      // Ctrl+Tab - Next terminal tab group
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'Tab') {
+        if (this._tabGroups && this._tabGroups.length > 1) {
+          e.preventDefault();
+          const currentIdx = this._tabGroups.findIndex(g => g.id === this._activeGroupId);
+          const nextIdx = (currentIdx + 1) % this._tabGroups.length;
+          this.switchTerminalGroup(this._tabGroups[nextIdx].id);
+          this.renderTerminalGroupTabs();
+        }
+      }
       // Ctrl+Shift+N / Cmd+Shift+N - New Worktree Task
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
         e.preventDefault();
@@ -11130,6 +11140,16 @@ class CWMApp {
     this._activeGroupId = null;
     this._layoutSaveTimer = null;
 
+    // Mouse wheel scrolls the tab strip horizontally when tabs overflow
+    if (this.els.terminalGroupsTabs) {
+      this.els.terminalGroupsTabs.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          this.els.terminalGroupsTabs.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    }
+
     // Load saved layout
     this.loadTerminalLayout();
   }
@@ -11230,6 +11250,12 @@ class CWMApp {
     </button>`;
 
     this.els.terminalGroupsTabs.innerHTML = html;
+
+    // Scroll active tab into view (for overflow / Ctrl+Tab navigation)
+    requestAnimationFrame(() => {
+      const activeTab = this.els.terminalGroupsTabs.querySelector('.terminal-group-tab.active');
+      if (activeTab) activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    });
 
     // Bind the "+" button
     const addBtn = this.els.terminalGroupsTabs.querySelector('.terminal-groups-add');
