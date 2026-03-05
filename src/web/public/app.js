@@ -2457,7 +2457,7 @@ class CWMApp {
     if (session && (!session.status || session.status === 'stopped')) {
       const confirmed = await this.showConfirmModal({
         title: 'Start Session?',
-        message: `<strong>${this.escapeHtml(session.name)}</strong> is not running. Would you like to start it?`,
+        message: `<strong>${session.name ? this.escapeHtml(session.name) : 'This session'}</strong> is not running. Would you like to start it?`,
         confirmText: 'Start',
         confirmClass: 'btn-primary',
       });
@@ -2711,7 +2711,7 @@ class CWMApp {
       if (allSession && allSession !== session) allSession.workspaceId = targetWorkspaceId;
       this.renderWorkspaces();
       this.renderSessions();
-      this.showToast(`Moved "${session.name}" to "${targetWs.name}"`, 'success');
+      this.showToast(`Moved "${session.name || 'untitled'}" to "${targetWs.name}"`, 'success');
     } catch (err) {
       this.showToast('Failed to move session: ' + (err.message || ''), 'error');
     }
@@ -7723,7 +7723,7 @@ class CWMApp {
 
       const renderSessionItem = (s) => {
         const isHidden = this.state.hiddenSessions.has(s.id);
-        const name = s.name || s.id.substring(0, 12);
+        const name = s.name || '';
 
         // Tri-state dot for worktree task sessions, simple dot for regular sessions
         let statusDot, tristateAttr = '';
@@ -8196,7 +8196,7 @@ class CWMApp {
             <span class="status-dot ${statusClass}"></span>
           </div>
           <div class="session-info">
-            <div class="session-name">${this.escapeHtml(s.name)} ${flagBadges.join(' ')}</div>
+            <div class="session-name">${s.name ? this.escapeHtml(s.name) : '<span class="session-name-empty">untitled</span>'} ${flagBadges.join(' ')}</div>
             <div class="session-meta-row">
               ${s.workingDir ? `<span class="session-dir" title="${this.escapeHtml(s.workingDir)}">${this.escapeHtml(this.truncatePath(s.workingDir))}</span>` : ''}
               ${s.topic ? `<span class="session-topic">${this.escapeHtml(s.topic)}</span>` : ''}
@@ -8242,7 +8242,13 @@ class CWMApp {
     this.els.detailStatusDot.className = `detail-status-dot status-dot-${_detailStatus}`;
 
     // Title
-    this.els.detailTitle.textContent = session.name;
+    if (session.name) {
+      this.els.detailTitle.textContent = session.name;
+      this.els.detailTitle.classList.remove('session-name-empty');
+    } else {
+      this.els.detailTitle.textContent = 'untitled';
+      this.els.detailTitle.classList.add('session-name-empty');
+    }
 
     // Status badge
     const status = _detailStatus;
@@ -15300,7 +15306,7 @@ class CWMApp {
           <input type="checkbox" class="sm-session-checkbox" data-id="${s.id}" ${checked}>
           <span class="sm-status-dot ${statusClass}"></span>
           <div class="sm-session-info">
-            <span class="sm-session-name">${this.escapeHtml(s.name || s.id)}</span>
+            <span class="sm-session-name${s.name ? '' : ' session-name-empty'}">${s.name ? this.escapeHtml(s.name) : 'untitled'}</span>
             <span class="sm-session-meta">${this.escapeHtml(s.workingDir || '')}</span>
           </div>
           ${wsName ? `<span class="sm-workspace-badge">${this.escapeHtml(wsName)}</span>` : ''}
