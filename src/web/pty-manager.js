@@ -430,7 +430,7 @@ class PtySessionManager {
         } catch (_) { return null; }
       }
 
-      // Apply a newly detected UUID — update store + carry name forward
+      // Apply a newly detected UUID — update store and push to connected clients
       function applyDetectedUUID(newUUID, newMtime) {
         if (newUUID === trackedUUID) return; // No change
         const oldUUID = trackedUUID;
@@ -439,27 +439,55 @@ class PtySessionManager {
 
         console.log(`[PTY] New Claude session UUID for ${sessionId}: ${newUUID}${oldUUID ? ' (was ' + oldUUID + ')' : ''}`);
 
+        let displayName = newUUID; // default: UUID itself
         try {
           const store = getStore();
-          if (store.getSession(sessionId)) {
-            store.updateSession(sessionId, { resumeSessionId: newUUID });
-          }
-          // On first UUID detection, carry the store session's display name.
-          // Use 'manual' source only if the user explicitly named the session;
-          // otherwise 'auto' so terminal title changes can still override it.
-          // After /clear (oldUUID !== null) we intentionally do NOT inherit the
-          // old name — the user may start a completely different task in that tab.
+          const storeSession = store.getSession(sessionId);
+
           if (!oldUUID) {
-            const storeSession = store.getSession(sessionId);
-            if (storeSession && storeSession.name) {
-              const nameSource = storeSession.nameIsCustom ? 'manual' : 'auto';
-              store.setSessionName(newUUID, storeSession.name, nameSource);
-              console.log(`[PTY] Synced store session name "${storeSession.name}" to first UUID ${newUUID} (source: ${nameSource})`);
+            // ── First UUID detection ──
+            if (storeSession) {
+              store.updateSession(sessionId, { resumeSessionId: newUUID });
+              if (storeSession.nameIsCustom && storeSession.name) {
+                // Carry manual name to the UUID registry
+                store.setSessionName(newUUID, storeSession.name, 'manual');
+                displayName = storeSession.name;
+                console.log(`[PTY] Carried manual name "${storeSession.name}" to first UUID ${newUUID}`);
+              } else {
+                // Use UUID itself as the auto-name
+                store.setSessionName(newUUID, newUUID, 'auto');
+                console.log(`[PTY] Registered first UUID ${newUUID} with auto-name (UUID)`);
+              }
+            } else {
+              // No store session (e.g. "New Session Here" pane) — still register the UUID
+              store.setSessionName(newUUID, newUUID, 'auto');
+              console.log(`[PTY] Registered first UUID ${newUUID} (no store session)`);
             }
+          } else {
+            // ── After /clear — always start fresh ──
+            if (storeSession) {
+              store.updateSession(sessionId, { resumeSessionId: newUUID });
+              store.updateSession(sessionId, { name: '' });
+            }
+            // New UUID gets the UUID itself as its auto-name; never carry old name
+            store.setSessionName(newUUID, newUUID, 'auto');
+            console.log(`[PTY] Post-/clear: registered new UUID ${newUUID} (was ${oldUUID})`);
           }
         } catch (_) {}
 
         session.detectedResumeId = newUUID;
+
+        // ── Push uuid-detected control message to all attached WebSocket clients ──
+        const msg = JSON.stringify({ type: 'uuid-detected', uuid: newUUID, name: displayName });
+        for (const ws of session.clients) {
+          try {
+            if (ws.readyState === 1) { // WebSocket.OPEN
+              ws.send(msg);
+            }
+          } catch (_) {
+            // ignore individual send failures
+          }
+        }
       }
 
       // Initial detection after 8s (Claude needs time to create the JSONL file)
