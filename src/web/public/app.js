@@ -9203,12 +9203,23 @@ class CWMApp {
       if (idx !== -1) this.closeTerminalPane(idx);
     };
 
-    // Auto-assign terminal title as session name if no name exists yet
-    tp.onTitleChange = async (title, sessionId) => {
-      if (!title || !sessionId) return;
-      if (this.getSessionNameSource(sessionId) === 'manual') return;
-      await this.syncSessionTitle(sessionId, title, 'auto');
-      this.renderProjects(); // Refresh Discovered section to show updated name
+    // OSC 2 terminal title changes no longer drive session naming
+    tp.onTitleChange = null;
+
+    tp.onUuidDetected = (uuid, name) => {
+      const slotIdx = this.terminalPanes.indexOf(tp);
+      if (slotIdx === -1) return;
+      tp.sessionName = name || uuid;
+      // Update pane title bar
+      const paneEl = document.getElementById(`term-pane-${slotIdx}`);
+      const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
+      if (titleEl) {
+        titleEl.textContent = tp.sessionName;
+        titleEl.classList.remove('session-name-empty');
+      }
+      // Refresh session lists
+      this.renderProjects();
+      this.loadSessions().then(() => this.renderWorkspaces());
     };
 
     // Enable auto-trust if the setting is on

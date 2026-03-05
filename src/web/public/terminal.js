@@ -544,7 +544,10 @@ class TerminalPane {
       if (typeof data === 'string' && data.charAt(0) === '{') {
         try {
           const msg = JSON.parse(data);
-          if (msg.type === 'exit') {
+          if (msg.type === 'uuid-detected') {
+            this.onUuidDetected?.(msg.uuid, msg.name);
+            return; // Don't write JSON control message to terminal output
+          } else if (msg.type === 'exit') {
             // Flush any pending writes before showing exit status
             this._flushWriteBuffer();
             this._status('[Process exited with code ' + msg.exitCode + ']', 'red');
