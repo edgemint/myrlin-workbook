@@ -1554,6 +1554,15 @@ class CWMApp {
         wsSessionItem.classList.add('dragging');
         return;
       }
+      const projectGroupHeader = e.target.closest('.ws-project-group-header');
+      if (projectGroupHeader) {
+        const dir = projectGroupHeader.dataset.dir;
+        const wsId = projectGroupHeader.dataset.wsId;
+        e.dataTransfer.setData('cwm/project-group', JSON.stringify({ dir, wsId }));
+        e.dataTransfer.effectAllowed = 'move';
+        projectGroupHeader.closest('.ws-project-group').classList.add('dragging');
+        return;
+      }
       const workspaceItem = e.target.closest('.workspace-item');
       if (workspaceItem) {
         e.dataTransfer.setData('cwm/workspace', workspaceItem.dataset.id);
@@ -1564,7 +1573,7 @@ class CWMApp {
     });
 
     wsList.addEventListener('dragend', (e) => {
-      const el = e.target.closest('.ws-session-item, .workspace-item');
+      const el = e.target.closest('.ws-session-item, .workspace-item, .ws-project-group');
       if (el) el.classList.remove('dragging');
     });
 
