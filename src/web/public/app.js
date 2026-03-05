@@ -7779,9 +7779,12 @@ class CWMApp {
         const metaParts = [badges, sizeStr ? `<span class="ws-session-size">${sizeStr}</span>` : '', timeStr ? `<span class="ws-session-time">${timeStr}</span>` : ''].filter(Boolean).join('');
         const metaRow = metaParts ? `<div class="ws-session-meta-row">${metaParts}</div>` : '';
 
+        const nameHtml = name
+          ? `<span class="ws-session-name">${this.escapeHtml(name)}</span>`
+          : `<span class="ws-session-name session-name-empty">untitled</span>`;
         return `<div class="ws-session-item${isHidden ? ' ws-session-hidden' : ''}" data-session-id="${s.id}" draggable="true" title="${this.escapeHtml(s.workingDir || '')}">
           <span class="ws-session-dot${tristateAttr}" style="background: ${statusDot}"></span>${pip}
-          <span class="ws-session-name">${this.escapeHtml(name)}</span>
+          ${nameHtml}
           ${metaRow}
         </div>`;
       };
@@ -8656,7 +8659,8 @@ class CWMApp {
         const sessName = s.name || 'unnamed';
         const storedTitle = this.getProjectSessionTitle(sessName);
         const isAutoName = storedTitle && this.getSessionNameSource(sessName) === 'auto';
-        const displayName = storedTitle || (sessName.length > 24 ? sessName.substring(0, 24) + '...' : sessName);
+        const displayTitle = storedTitle || '';
+        const displayName = displayTitle || (sessName.length > 24 ? sessName.substring(0, 24) + '...' : sessName);
         const sessSize = s.size ? this.formatSize(s.size) : '';
         const sessTime = s.modified ? this.relativeTime(s.modified) : '';
         // Tooltip: show title + session ID so user sees both on hover
@@ -8664,9 +8668,12 @@ class CWMApp {
           ? `${storedTitle}\n\nSession: ${sessName}`
           : sessName;
         const isOpen = activeIds.has(sessName);
+        const sessionNameHtml = displayTitle
+          ? `<span class="project-session-name${isAutoName ? ' session-name-auto' : ''}">${this.escapeHtml(displayTitle)}</span>`
+          : `<span class="project-session-name session-name-empty">untitled</span>`;
         return `<div class="project-session-item${isOpen ? ' project-session-open' : ''}" draggable="true" data-session-name="${this.escapeHtml(sessName)}" data-project-path="${this.escapeHtml(p.realPath || '')}" data-project-encoded="${this.escapeHtml(encoded)}" title="${this.escapeHtml(tooltip)}">
           ${isOpen ? '<span class="project-session-active-icon">&#10003;</span>' : ''}
-          <span class="project-session-name${isAutoName ? ' session-name-auto' : ''}">${this.escapeHtml(displayName)}</span>
+          ${sessionNameHtml}
           ${sessSize ? `<span class="project-session-size">${sessSize}</span>` : ''}
           ${sessTime ? `<span class="project-session-time">${sessTime}</span>` : ''}
         </div>`;
@@ -9150,7 +9157,15 @@ class CWMApp {
     // Update pane state
     paneEl.classList.remove('terminal-pane-empty');
     const titleEl = paneEl.querySelector('.terminal-pane-title');
-    if (titleEl) titleEl.textContent = sessionName || sessionId;
+    if (titleEl) {
+      if (sessionName) {
+        titleEl.textContent = sessionName;
+        titleEl.classList.remove('session-name-empty');
+      } else {
+        titleEl.textContent = 'untitled';
+        titleEl.classList.add('session-name-empty');
+      }
+    }
     const closeBtn = paneEl.querySelector('.terminal-pane-close');
     if (closeBtn) closeBtn.hidden = false;
     const uploadBtn2 = paneEl.querySelector('.terminal-pane-upload');
@@ -11261,7 +11276,7 @@ class CWMApp {
         if (p.sessionId) {
           const restoreOpts = Object.assign({}, p.spawnOpts || {});
           if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
-          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || 'Terminal', restoreOpts);
+          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts);
         }
       });
     }
@@ -11675,7 +11690,7 @@ class CWMApp {
           if (p.sessionId) {
             const restoreOpts = Object.assign({}, p.spawnOpts || {});
             if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
-            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || 'Terminal', restoreOpts);
+            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts);
           }
         });
       }
