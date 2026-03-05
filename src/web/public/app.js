@@ -9793,6 +9793,12 @@ class CWMApp {
   onTerminalIdle({ sessionId, sessionName }) {
     const sessionIdx = this.terminalPanes.findIndex(tp => tp && tp.sessionId === sessionId);
     const name = sessionName || sessionId.substring(0, 12);
+    // sessionIdx === -1 means the session's pane is not in the active tab group.
+    // Panes in non-active groups are detached into DocumentFragments, so
+    // document.getElementById returns null in TerminalPane._checkForCompletion
+    // and the terminal-idle event is never dispatched — this guard is unreachable
+    // for cross-group sessions. _navigateToSession's cross-group path handles
+    // future callers that may supply sessionId without a mounted pane.
     if (sessionIdx === -1) return;
 
     // Look up workspace name for this session
