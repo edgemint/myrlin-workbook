@@ -8660,7 +8660,6 @@ class CWMApp {
         const storedTitle = this.getProjectSessionTitle(sessName);
         const isAutoName = storedTitle && this.getSessionNameSource(sessName) === 'auto';
         const displayTitle = storedTitle || '';
-        const displayName = displayTitle || (sessName.length > 24 ? sessName.substring(0, 24) + '...' : sessName);
         const sessSize = s.size ? this.formatSize(s.size) : '';
         const sessTime = s.modified ? this.relativeTime(s.modified) : '';
         // Tooltip: show title + session ID so user sees both on hover
