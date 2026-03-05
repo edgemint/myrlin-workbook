@@ -444,25 +444,17 @@ class PtySessionManager {
           if (store.getSession(sessionId)) {
             store.updateSession(sessionId, { resumeSessionId: newUUID });
           }
-          // Carry the display name forward to the new UUID.
+          // On first UUID detection, carry the store session's display name.
+          // Use 'manual' source only if the user explicitly named the session;
+          // otherwise 'auto' so terminal title changes can still override it.
+          // After /clear (oldUUID !== null) we intentionally do NOT inherit the
+          // old name — the user may start a completely different task in that tab.
           if (!oldUUID) {
-            // First detection: seed from the store session's display name.
-            // Use 'manual' source only if the user explicitly named the session;
-            // otherwise 'auto' so terminal title changes can still override it.
             const storeSession = store.getSession(sessionId);
             if (storeSession && storeSession.name) {
               const nameSource = storeSession.nameIsCustom ? 'manual' : 'auto';
               store.setSessionName(newUUID, storeSession.name, nameSource);
               console.log(`[PTY] Synced store session name "${storeSession.name}" to first UUID ${newUUID} (source: ${nameSource})`);
-            }
-          } else {
-            // /clear case: carry the old UUID's persisted name to the new UUID
-            // so the session keeps its identity in the Discovered panel.
-            const existingName = store.getSessionName(oldUUID);
-            if (existingName) {
-              const existingSource = store.getSessionNameSource(oldUUID) || 'auto';
-              store.setSessionName(newUUID, existingName, existingSource);
-              console.log(`[PTY] Carried session name "${existingName}" to new UUID ${newUUID} (was ${oldUUID}, source: ${existingSource})`);
             }
           }
         } catch (_) {}
