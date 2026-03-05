@@ -15698,6 +15698,34 @@ class CWMApp {
   }
 
   /**
+   * Find an existing workspace whose sessions share `dir` as workingDir,
+   * or whose name matches the folder name. Creates one if nothing matches.
+   * @param {string} dir - Absolute path of the project directory
+   * @returns {Promise<string>} workspaceId
+   */
+  async findOrCreateWorkspaceForDir(dir) {
+    const normDir = dir.replace(/\\/g, '/').toLowerCase();
+    const dirParts = dir.replace(/\\/g, '/').split('/').filter(Boolean);
+    const projectName = dirParts[dirParts.length - 1] || 'project';
+
+    // Match by existing session workingDir
+    for (const ws of (this.state.workspaces || [])) {
+      const wsSessions = (this.state.allSessions || []).filter(s => s.workspaceId === ws.id);
+      if (wsSessions.some(s => s.workingDir && s.workingDir.replace(/\\/g, '/').toLowerCase() === normDir)) {
+        return ws.id;
+      }
+    }
+    // Match by workspace name
+    const nameMatch = (this.state.workspaces || []).find(ws => ws.name.toLowerCase() === projectName.toLowerCase());
+    if (nameMatch) return nameMatch.id;
+
+    // Create new workspace
+    const wsData = await this.api('POST', '/api/workspaces', { name: projectName });
+    await this.loadWorkspaces();
+    return (wsData.workspace || wsData).id;
+  }
+
+  /**
    * Launch a new Claude Code session in the selected project directory.
    * Creates the session via API, opens a terminal pane, and switches to terminal view.
    */
@@ -15716,29 +15744,7 @@ class CWMApp {
     this.els.launcherSubmit.textContent = 'Launching...';
 
     try {
-      // Find or create a workspace for this project
-      const dirParts = dir.replace(/\\/g, '/').split('/').filter(Boolean);
-      const projectName = dirParts[dirParts.length - 1] || 'project';
-
-      // Find a workspace for this project: first by matching an existing session's
-      // workingDir, then by workspace name, then auto-create one.
-      let workspaceId = null;
-      for (const ws of (this.state.workspaces || [])) {
-        const wsSessions = (this.state.allSessions || []).filter(s => s.workspaceId === ws.id);
-        if (wsSessions.some(s => s.workingDir && s.workingDir.replace(/\\/g, '/').toLowerCase() === dir.replace(/\\/g, '/').toLowerCase())) {
-          workspaceId = ws.id;
-          break;
-        }
-      }
-      if (!workspaceId) {
-        const nameMatch = (this.state.workspaces || []).find(ws => ws.name.toLowerCase() === projectName.toLowerCase());
-        if (nameMatch) workspaceId = nameMatch.id;
-      }
-      if (!workspaceId) {
-        const wsData = await this.api('POST', '/api/workspaces', { name: projectName });
-        workspaceId = (wsData.workspace || wsData).id;
-        await this.loadWorkspaces();
-      }
+      const workspaceId = await this.findOrCreateWorkspaceForDir(dir);
 
       const payload = {
         name,
