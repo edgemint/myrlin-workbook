@@ -39,6 +39,18 @@ const DEFAULT_STATE = {
     theme: 'dark',
     confirmBeforeClose: true,
     subscriptionBudget: 0,  // 0 = feature disabled; user sets e.g. 100 or 200
+    hookNotifications: {
+      enabled: true,
+      triggers: {
+        awaiting_input: true,
+        permission_needed: true,
+        task_completed: true,
+        tool_failure: false,
+        session_error: false,
+        idle: false,
+      },
+      idleTimeoutMinutes: 5,
+    },
   },
 };
 
@@ -372,6 +384,7 @@ class Store extends EventEmitter {
       createdAt: now,
       lastActive: now,
       logs: [],
+      hookState: null, // null | 'active' | 'awaiting_input' | 'idle' | 'stopped' | 'error'
     };
     this._state.sessions[id] = session;
     this._state.workspaces[workspaceId].sessions.push(id);

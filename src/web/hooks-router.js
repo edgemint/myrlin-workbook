@@ -11,8 +11,10 @@
 'use strict';
 
 const { Router } = require('express');
+const { EventEmitter } = require('events');
 
 const router = Router();
+const hookBus = new EventEmitter();
 
 // ANSI color helpers for readable console output
 const C = {
@@ -91,8 +93,11 @@ function truncateDeep(obj, maxLen) {
 // permissive — if Claude adds new events, no code change is needed here.
 
 router.post('/:event', (req, res) => {
-  logHookEvent(req.params.event, req.body || {});
+  const slug = req.params.event;
+  const payload = req.body || {};
+  logHookEvent(slug, payload);
+  hookBus.emit('hook', { slug, payload });
   res.json({ ok: true });
 });
 
-module.exports = { hooksRouter: router };
+module.exports = { hooksRouter: router, hookBus };
