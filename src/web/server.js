@@ -18,6 +18,7 @@ const { setupAuth, requireAuth, isValidToken } = require('./auth');
 const { getStore } = require('../state/store');
 const { launchSession, stopSession, restartSession } = require('../core/session-manager');
 const { backupFrontend, restoreFrontend, getBackupStatus } = require('./backup');
+const { hooksRouter } = require('./hooks-router');
 
 // ─── Input Sanitization ────────────────────────────────────
 // Validates user-controlled fields that flow into shell commands.
@@ -173,6 +174,10 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ─── Claude Code Hooks (no auth — localhost only) ────────────
+
+app.use('/hooks', hooksRouter);
 
 // ─── Fallback/Backup Endpoints ──────────────────────────────
 
