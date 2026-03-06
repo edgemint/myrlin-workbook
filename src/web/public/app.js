@@ -3786,6 +3786,14 @@ class CWMApp {
   /** Persist settings to localStorage */
   saveSettings() {
     localStorage.setItem('cwm_settings', JSON.stringify(this.state.settings));
+    // Sync server-side settings that affect backend behavior
+    if (this.state.settings.hookNotifications) {
+      this.apiFetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hookNotifications: this.state.settings.hookNotifications }),
+      }).catch(() => {}); // Best-effort sync
+    }
   }
 
   /** Get a single setting value */
@@ -4438,6 +4446,66 @@ class CWMApp {
 
     this.els.settingsBody.innerHTML = html;
 
+    // ── Hook Notifications section ─────────────────────────
+    const hookNotifsSection = document.createElement('div');
+    hookNotifsSection.className = 'settings-category';
+    hookNotifsSection.innerHTML = `
+      <div class="settings-category-label">Hook Notifications</div>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:10px 0;">
+        <div class="settings-row-desc" style="margin:0;">Configure which Claude Code events trigger browser notifications.</div>
+        <label class="settings-toggle">
+          <input type="checkbox" data-hook-notif="enabled">
+          <span class="settings-toggle-track"></span>
+          <span class="settings-toggle-thumb"></span>
+          <span style="margin-left:8px;">Enable Hook Notifications</span>
+        </label>
+        <div class="hook-notif-triggers" style="margin-left:16px;display:flex;flex-direction:column;gap:6px;">
+          <label class="settings-toggle">
+            <input type="checkbox" data-hook-trigger="awaiting_input">
+            <span class="settings-toggle-track"></span>
+            <span class="settings-toggle-thumb"></span>
+            <span style="margin-left:8px;">Awaiting Input — Claude finished, waiting for you</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" data-hook-trigger="permission_needed">
+            <span class="settings-toggle-track"></span>
+            <span class="settings-toggle-thumb"></span>
+            <span style="margin-left:8px;">Permission Needed — Claude needs tool approval</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" data-hook-trigger="task_completed">
+            <span class="settings-toggle-track"></span>
+            <span class="settings-toggle-thumb"></span>
+            <span style="margin-left:8px;">Task Completed — a task was marked done</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" data-hook-trigger="tool_failure">
+            <span class="settings-toggle-track"></span>
+            <span class="settings-toggle-thumb"></span>
+            <span style="margin-left:8px;">Tool Failure — a tool call failed</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" data-hook-trigger="session_error">
+            <span class="settings-toggle-track"></span>
+            <span class="settings-toggle-thumb"></span>
+            <span style="margin-left:8px;">Session Error — repeated failures detected</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" data-hook-trigger="idle">
+            <span class="settings-toggle-track"></span>
+            <span class="settings-toggle-thumb"></span>
+            <span style="margin-left:8px;">Session Idle — no activity for timeout period</span>
+          </label>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:8px;">
+            <label style="font-size:12px;">Idle timeout:</label>
+            <input type="number" min="1" max="60" data-hook-notif="idleTimeoutMinutes"
+                   style="width:60px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text);font-size:12px;">
+            <span style="font-size:12px;">minutes</span>
+          </div>
+        </div>
+      </div>`;
+    this.els.settingsBody.appendChild(hookNotifsSection);
+
     // ── Named tunnel controls ──────────────────────────────
     const ntStatus = document.getElementById('named-tunnel-status');
     const ntTokenInput = document.getElementById('named-tunnel-token-input');
@@ -4668,6 +4736,48 @@ class CWMApp {
         this.applySettings();
       });
     });
+
+    // ── Hook notification event bindings ───────────────────
+    // Master enable toggle
+    const hookEnabledToggle = this.els.settingsBody.querySelector('[data-hook-notif="enabled"]');
+    if (hookEnabledToggle) {
+      const hn = (this.state.settings.hookNotifications || {});
+      hookEnabledToggle.checked = hn.enabled !== false;
+      hookEnabledToggle.addEventListener('change', (e) => {
+        if (!this.state.settings.hookNotifications) this.state.settings.hookNotifications = {};
+        this.state.settings.hookNotifications.enabled = e.target.checked;
+        this.saveSettings();
+      });
+    }
+
+    // Per-trigger toggles
+    this.els.settingsBody.querySelectorAll('[data-hook-trigger]').forEach(toggle => {
+      const key = toggle.dataset.hookTrigger;
+      const hn = (this.state.settings.hookNotifications || {});
+      const triggers = hn.triggers || {};
+      toggle.checked = triggers[key] === true;
+      toggle.addEventListener('change', (e) => {
+        if (!this.state.settings.hookNotifications) this.state.settings.hookNotifications = {};
+        if (!this.state.settings.hookNotifications.triggers) this.state.settings.hookNotifications.triggers = {};
+        this.state.settings.hookNotifications.triggers[key] = e.target.checked;
+        this.saveSettings();
+      });
+    });
+
+    // Idle timeout input
+    const idleInput = this.els.settingsBody.querySelector('[data-hook-notif="idleTimeoutMinutes"]');
+    if (idleInput) {
+      const hn = (this.state.settings.hookNotifications || {});
+      idleInput.value = hn.idleTimeoutMinutes || 5;
+      idleInput.addEventListener('change', (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (val >= 1 && val <= 60) {
+          if (!this.state.settings.hookNotifications) this.state.settings.hookNotifications = {};
+          this.state.settings.hookNotifications.idleTimeoutMinutes = val;
+          this.saveSettings();
+        }
+      });
+    }
   }
 
   /** Filter settings from search input */
