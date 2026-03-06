@@ -143,6 +143,17 @@ class CWMApp {
     // Load persisted workspace accordion collapse state (prevents re-open on re-render)
     try { this._wsCollapseState = JSON.parse(localStorage.getItem('cwm_wsCollapseState') || '{}'); } catch (_) { this._wsCollapseState = {}; }
 
+    // Load persisted notification center state
+    this._notifications = [];
+    this._notifIdCounter = 0;
+    try {
+      this._notifications = JSON.parse(localStorage.getItem('cwm_notifications') || '[]');
+      this._notifIdCounter = this._notifications.reduce((max, n) => Math.max(max, n.id || 0), 0);
+    } catch (_) { this._notifications = []; }
+    this._notifCenterOpen = false;
+    // Badge will be updated after DOM is ready — see init()
+    // (calling _updateNotificationBadge here would run before this.els is set)
+
     // ─── Terminal panes ──────────────────────────────────────────
     this.terminalPanes = new Array(CWMApp.MAX_PANES).fill(null);
     this._activeTerminalSlot = null;
@@ -476,6 +487,14 @@ class CWMApp {
       conflictCenterSummary: document.getElementById('conflict-center-summary'),
       conflictRefreshBtn: document.getElementById('conflict-refresh-btn'),
       conflictCloseBtn: document.getElementById('conflict-close-btn'),
+
+      // Notification Center
+      notificationBellBtn: document.getElementById('notification-bell-btn'),
+      notificationBadge: document.getElementById('notification-badge'),
+      notificationCenterOverlay: document.getElementById('notification-center-overlay'),
+      notificationCenterList: document.getElementById('notification-center-list'),
+      notifMarkAllReadBtn: document.getElementById('notif-mark-all-read-btn'),
+      notifCloseBtn: document.getElementById('notif-close-btn'),
 
       // Diff Viewer
       diffViewerOverlay: document.getElementById('diff-viewer-overlay'),
@@ -818,6 +837,21 @@ class CWMApp {
       });
     }
 
+    // Notification Center
+    if (this.els.notificationBellBtn) {
+      this.els.notificationBellBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleNotificationCenter();
+      });
+    }
+    if (this.els.notifCloseBtn) {
+      this.els.notifCloseBtn.addEventListener('click', () => this.closeNotificationCenter());
+    }
+    if (this.els.notifMarkAllReadBtn) {
+      this.els.notifMarkAllReadBtn.addEventListener('click', () => this._markAllNotificationsRead());
+    }
+    this._updateNotificationBadge();
+
     // Session Manager - click stat chips to open overlay
     const statChips = document.querySelectorAll('.stat-chip');
     statChips.forEach(chip => {
@@ -1051,6 +1085,8 @@ class CWMApp {
           this.closeSettings();
         } else if (this.els.conflictCenterOverlay && !this.els.conflictCenterOverlay.hidden) {
           this.closeConflictCenter();
+        } else if (this.els.notificationCenterOverlay && !this.els.notificationCenterOverlay.hidden) {
+          this.closeNotificationCenter();
         } else if (this.els.sessionManagerOverlay && !this.els.sessionManagerOverlay.hidden) {
           this.closeSessionManager();
         } else if (this.els.searchOverlay && !this.els.searchOverlay.hidden) {
@@ -3893,6 +3929,15 @@ class CWMApp {
         tags: ['theme', 'dark', 'light', 'color', 'appearance', 'switch'],
         icon: '&#127912;',
         action: () => { if (typeof this.toggleTheme === 'function') this.toggleTheme(); },
+      },
+      {
+        id: 'notification-center',
+        name: 'Notification Center',
+        description: 'View recent notifications and mark them as read',
+        category: 'action',
+        tags: ['notifications', 'bell', 'alerts', 'unread'],
+        icon: '&#128276;',
+        action: () => this.toggleNotificationCenter(),
       },
       {
         id: 'view-terminal',
@@ -7592,6 +7637,8 @@ class CWMApp {
 
     // Auto-dismiss after 60 seconds
     setTimeout(() => this.dismissToast(toast), 60000);
+
+    return toast;
   }
 
   /**
@@ -7682,10 +7729,185 @@ class CWMApp {
 
   dismissToast(toast) {
     if (!toast.parentNode) return;
+    if (toast.dataset && toast.dataset.notifId) {
+      this._markNotificationRead(parseInt(toast.dataset.notifId, 10));
+    }
     toast.classList.add('toast-exit');
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
     // Fallback removal if animationend doesn't fire
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════
+     NOTIFICATION CENTER
+     ═══════════════════════════════════════════════════════════ */
+
+  /**
+   * Push a notification into the persistent notification center list.
+   * @param {string} message - Notification text
+   * @param {'info'|'success'|'warning'|'error'} level - Severity
+   * @param {string|null} sessionId - Optional session ID for "go to session" action
+   * @returns {number} The notification ID
+   */
+  _pushNotification(message, level = 'info', sessionId = null) {
+    const notif = {
+      id: ++this._notifIdCounter,
+      message,
+      level,
+      sessionId: sessionId || null,
+      timestamp: Date.now(),
+      read: false,
+    };
+    this._notifications.push(notif);
+    // Trim to 100 max
+    if (this._notifications.length > 100) {
+      this._notifications = this._notifications.slice(-100);
+    }
+    this._persistNotifications();
+    this._updateNotificationBadge();
+    if (this._notifCenterOpen) this._renderNotificationCenter();
+    return notif.id;
+  }
+
+  /**
+   * Mark a single notification as read by ID.
+   */
+  _markNotificationRead(id) {
+    const notif = this._notifications.find(n => n.id === id);
+    if (notif && !notif.read) {
+      notif.read = true;
+      this._persistNotifications();
+      this._updateNotificationBadge();
+      if (this._notifCenterOpen) this._renderNotificationCenter();
+    }
+  }
+
+  /**
+   * Mark all notifications as read.
+   */
+  _markAllNotificationsRead() {
+    let changed = false;
+    for (const n of this._notifications) {
+      if (!n.read) { n.read = true; changed = true; }
+    }
+    if (changed) {
+      this._persistNotifications();
+      this._updateNotificationBadge();
+      if (this._notifCenterOpen) this._renderNotificationCenter();
+    }
+  }
+
+  /**
+   * Persist notifications to localStorage.
+   */
+  _persistNotifications() {
+    try {
+      localStorage.setItem('cwm_notifications', JSON.stringify(this._notifications));
+    } catch (_) { /* quota exceeded — ignore */ }
+  }
+
+  /**
+   * Update the badge count on the bell icon.
+   */
+  _updateNotificationBadge() {
+    const unread = this._notifications.filter(n => !n.read).length;
+    if (this.els.notificationBadge) {
+      this.els.notificationBadge.textContent = unread > 99 ? '99+' : String(unread);
+      this.els.notificationBadge.hidden = unread === 0;
+    }
+  }
+
+  /**
+   * Toggle the notification center overlay.
+   */
+  toggleNotificationCenter() {
+    if (this._notifCenterOpen) {
+      this.closeNotificationCenter();
+    } else {
+      this.openNotificationCenter();
+    }
+  }
+
+  /**
+   * Open the notification center overlay.
+   */
+  openNotificationCenter() {
+    this._notifCenterOpen = true;
+    if (this.els.notificationCenterOverlay) {
+      this.els.notificationCenterOverlay.hidden = false;
+    }
+    this._renderNotificationCenter();
+
+    this._notifOutsideHandler = (e) => {
+      if (this.els.notificationCenterOverlay && !this.els.notificationCenterOverlay.hidden &&
+          !this.els.notificationCenterOverlay.contains(e.target) &&
+          !e.target.closest('.notification-bell')) {
+        this.closeNotificationCenter();
+      }
+    };
+    setTimeout(() => document.addEventListener('click', this._notifOutsideHandler), 0);
+  }
+
+  /**
+   * Close the notification center overlay.
+   */
+  closeNotificationCenter() {
+    this._notifCenterOpen = false;
+    if (this.els.notificationCenterOverlay) {
+      this.els.notificationCenterOverlay.hidden = true;
+    }
+    document.removeEventListener('click', this._notifOutsideHandler);
+  }
+
+  /**
+   * Render the notification center list.
+   */
+  _renderNotificationCenter() {
+    const list = this.els.notificationCenterList;
+    if (!list) return;
+
+    if (this._notifications.length === 0) {
+      list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+      return;
+    }
+
+    const icons = {
+      info: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 8v4M9 6v.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+      success: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6 9.5l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      warning: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M9 2l7.5 13H1.5L9 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 7.5v3M9 12.5v.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+      error: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.5l5 5M11.5 6.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    };
+
+    // Render newest first
+    const sorted = [...this._notifications].reverse();
+    list.innerHTML = sorted.map(n => {
+      const isClickable = !!n.sessionId;
+      return `<div class="notif-item${n.read ? '' : ' notif-unread'}${isClickable ? ' notif-clickable' : ''}" data-notif-id="${n.id}"${isClickable ? ` data-session-id="${this.escapeHtml(n.sessionId)}"` : ''}>
+        <span class="notif-item-icon notif-${n.level}">${icons[n.level] || icons.info}</span>
+        <div class="notif-item-body">
+          <div class="notif-item-message">${this.escapeHtml(n.message)}</div>
+          <div class="notif-item-time">${this.relativeTime(n.timestamp)}</div>
+        </div>
+        <span class="notif-item-dot"></span>
+      </div>`;
+    }).join('');
+
+    // Click handlers
+    list.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = parseInt(el.dataset.notifId, 10);
+        this._markNotificationRead(id);
+        const sid = el.dataset.sessionId;
+        if (sid) {
+          const slotIdx = this.terminalPanes
+            ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === sid)
+            : -1;
+          this._navigateToSession(sid, slotIdx);
+          this.closeNotificationCenter();
+        }
+      });
+    });
   }
 
 
@@ -7786,17 +8008,22 @@ class CWMApp {
         const wsName = d.workspaceName ? ` (${d.workspaceName})` : '';
         const msg = d.message || 'needs attention';
 
+        // Push to notification center
+        const notifId = this._pushNotification(`${name}${wsName}: ${msg}`, 'info', d.sessionId || null);
+
         // In-app toast with action button to navigate to the session
         if (d.sessionId) {
-          this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
+          const toast = this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
             // Find the terminal pane slot for this session (-1 triggers cross-group search)
             const slotIdx = this.terminalPanes
               ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === d.sessionId)
               : -1;
             this._navigateToSession(d.sessionId, slotIdx);
           });
+          if (toast) toast.dataset.notifId = notifId;
         } else {
-          this.showToast(`${name}${wsName}: ${msg}`, 'info');
+          const toast = this.showToast(`${name}${wsName}: ${msg}`, 'info');
+          if (toast) toast.dataset.notifId = notifId;
         }
 
         // Browser notification (if enabled and window not focused)
@@ -10158,6 +10385,9 @@ class CWMApp {
 
     // In-app notifications (gated by completionNotifications setting)
     if (this.getSetting('completionNotifications') && sessionIdx !== this._activeTerminalSlot) {
+      // Push to notification center
+      const notifId = this._pushNotification(`${qualifiedName} is ready for input`, 'success', sessionId);
+
       // Flash the pane border green
       const paneEls = document.querySelectorAll('.terminal-pane');
       if (paneEls[sessionIdx]) {
@@ -10169,12 +10399,13 @@ class CWMApp {
       this._playNotificationSound();
 
       // Show toast
-      this.showActionToast(
+      const toast = this.showActionToast(
         `${qualifiedName} is ready for input`,
         'success',
         'Go to session',
         () => this._navigateToSession(sessionId, sessionIdx)
       );
+      if (toast) toast.dataset.notifId = notifId;
 
       // If the pane is in a non-active tab group, highlight the tab
       this._highlightTabGroupForSession(sessionId);
