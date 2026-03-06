@@ -71,6 +71,8 @@ class HookStateManager {
 
     if (slug === 'post-tool-use-failure') {
       this._recordFailure(claudeSessionId);
+      // Notify on individual tool failures if enabled
+      this._maybeNotifyToolFailure(session, claudeSessionId, payload);
       if (this._isErrorThresholdMet(claudeSessionId)) {
         this._transition(session, claudeSessionId, 'error', slug, payload);
       }
@@ -167,10 +169,10 @@ class HookStateManager {
     });
 
     // Check notification triggers
-    this._maybeNotify(session, newState, slug, payload);
+    this._maybeNotify(session, claudeSessionId, newState, slug, payload);
   }
 
-  _maybeNotify(session, newState, slug, payload) {
+  _maybeNotify(session, claudeSessionId, newState, slug, payload) {
     const store = getStore();
     const notifSettings = store.settings.hookNotifications;
     if (!notifSettings || !notifSettings.enabled) return;
@@ -201,6 +203,20 @@ class HookStateManager {
     if (shouldNotify) {
       this._emitNotification(session, claudeSessionId, notifType, notifMessage);
     }
+  }
+
+  _maybeNotifyToolFailure(session, claudeSessionId, payload) {
+    const store = getStore();
+    const notifSettings = store.settings.hookNotifications;
+    if (!notifSettings || !notifSettings.enabled) return;
+    if (!(notifSettings.triggers || {}).tool_failure) return;
+
+    this._emitNotification(
+      session,
+      claudeSessionId,
+      'tool_failure',
+      `Tool failed: ${payload.tool_name || 'unknown'}${payload.error ? ' — ' + payload.error.slice(0, 100) : ''}`
+    );
   }
 
   _maybeNotifyTaskCompleted(session, claudeSessionId, payload) {
