@@ -40,7 +40,8 @@ const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
 // ─── Hook Event Definitions ─────────────────────────────────
 
-const BASE_URL = `http://localhost:${PORT}`;
+// Absolute path to the relay script (embedded into hook commands)
+const RELAY_SCRIPT = path.join(__dirname, 'hook-relay.js').replace(/\\/g, '/');
 
 // Maps Claude Code event name → URL slug
 const HOOK_EVENTS = [
@@ -52,10 +53,10 @@ const HOOK_EVENTS = [
   { event: 'SubagentStop',  slug: 'subagent-stop'  },
 ];
 
-// The URL marker we use to identify CWM-owned hook entries.
+// The string marker we use to identify CWM-owned hook entries.
 // NOTE: If you change --port, run --remove with the OLD port first, otherwise
 // both port entries will coexist in settings.json and hooks will double-fire.
-const CWM_MARKER = `localhost:${PORT}/hooks/`;
+const CWM_MARKER = 'hook-relay.js';
 
 // ─── Load settings.json ─────────────────────────────────────
 
@@ -78,7 +79,7 @@ function loadSettings() {
  * Return the hook entry object for a given event slug.
  */
 function makeHookEntry(slug) {
-  return { hooks: [{ type: 'http', url: `${BASE_URL}/hooks/${slug}` }] };
+  return { hooks: [{ type: 'command', command: `node "${RELAY_SCRIPT}" ${slug} ${PORT}` }] };
 }
 
 /**
@@ -87,11 +88,7 @@ function makeHookEntry(slug) {
  * Returns the new array.
  */
 function mergeEventHooks(existing, slug) {
-  // Filter out any existing CWM hook entries for this event
-  const filtered = (existing || []).filter(entry => {
-    const urls = (entry.hooks || []).map(h => h.url || '');
-    return !urls.some(u => u.includes(CWM_MARKER));
-  });
+  const filtered = (existing || []).filter(entry => !isCwmEntry(entry));
   return [makeHookEntry(slug), ...filtered];
 }
 
@@ -99,10 +96,18 @@ function mergeEventHooks(existing, slug) {
  * Given an existing array of hook entries, remove all CWM-owned entries.
  */
 function removeEventHooks(existing) {
-  return (existing || []).filter(entry => {
-    const urls = (entry.hooks || []).map(h => h.url || '');
-    return !urls.some(u => u.includes(CWM_MARKER));
-  });
+  return (existing || []).filter(entry => !isCwmEntry(entry));
+}
+
+/**
+ * Check if a hook entry belongs to CWM by looking for the relay script marker
+ * in either the command string or the URL (for legacy http-type entries).
+ */
+function isCwmEntry(entry) {
+  return (entry.hooks || []).some(h =>
+    (h.command && h.command.includes(CWM_MARKER)) ||
+    (h.url && h.url.includes('/hooks/'))
+  );
 }
 
 // ─── Main ───────────────────────────────────────────────────
@@ -149,7 +154,7 @@ function main() {
     console.log('');
     console.log('Events wired:');
     for (const { event, slug } of HOOK_EVENTS) {
-      console.log(`  ${event.padEnd(14)} -> ${BASE_URL}/hooks/${slug}`);
+      console.log(`  ${event.padEnd(14)} -> hook-relay.js ${slug} ${PORT}`);
     }
     console.log('');
     console.log('Restart Claude Code for changes to take effect.');
