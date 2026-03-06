@@ -18,7 +18,8 @@ const { setupAuth, requireAuth, isValidToken } = require('./auth');
 const { getStore } = require('../state/store');
 const { launchSession, stopSession, restartSession } = require('../core/session-manager');
 const { backupFrontend, restoreFrontend, getBackupStatus } = require('./backup');
-const { hooksRouter } = require('./hooks-router');
+const { hooksRouter, hookBus } = require('./hooks-router');
+const { HookStateManager } = require('../core/hook-state-manager');
 
 // ─── Input Sanitization ────────────────────────────────────
 // Validates user-controlled fields that flow into shell commands.
@@ -2540,7 +2541,7 @@ app.get('/api/settings', requireAuth, (req, res) => {
  * Updates allowed server-side settings.
  */
 app.put('/api/settings', requireAuth, (req, res) => {
-  const allowed = ['subscriptionBudget'];
+  const allowed = ['subscriptionBudget', 'hookNotifications'];
   const updates = {};
   for (const k of allowed) {
     if (k in req.body) updates[k] = req.body[k];
@@ -6531,6 +6532,9 @@ function backfillResumeSessionIds() {
 function startServer(port = 3456, host = '127.0.0.1') {
   // Wire store events to SSE before accepting connections
   attachStoreEvents();
+
+    // Initialize hook state manager (hooks → state transitions → SSE)
+    new HookStateManager({ hookBus, broadcastSSE });
 
   // Backfill missing resumeSessionIds so cost tracking works for all sessions
   setImmediate(() => backfillResumeSessionIds());
