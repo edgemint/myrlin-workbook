@@ -52,7 +52,9 @@ const HOOK_EVENTS = [
   { event: 'SubagentStop',  slug: 'subagent-stop'  },
 ];
 
-// The URL marker we use to identify CWM-owned hook entries
+// The URL marker we use to identify CWM-owned hook entries.
+// NOTE: If you change --port, run --remove with the OLD port first, otherwise
+// both port entries will coexist in settings.json and hooks will double-fire.
 const CWM_MARKER = `localhost:${PORT}/hooks/`;
 
 // ─── Load settings.json ─────────────────────────────────────
