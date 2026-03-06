@@ -7641,6 +7641,54 @@ class CWMApp {
         this.loadSessions().then(() => { if (this._smOpen) this.renderSessionManager(); });
         this.loadStats();
         break;
+      case 'session:hook-state': {
+        // Update the session's hookState in local cache
+        if (data.data && data.data.sessionId) {
+          const sid = data.data.sessionId;
+          const sessions = this.state.sessions || [];
+          const session = sessions.find(s => s.id === sid);
+          if (session) {
+            session.hookState = data.data.hookState;
+          }
+        }
+        // Re-render session list to show new state badge
+        this.loadSessions().then(() => { if (this._smOpen) this.renderSessionManager(); });
+        break;
+      }
+
+      case 'session:notification': {
+        const d = data.data || {};
+        const name = d.sessionName || 'Session';
+        const wsName = d.workspaceName ? ` (${d.workspaceName})` : '';
+        const msg = d.message || 'needs attention';
+
+        // In-app toast
+        this.showToast(`${name}${wsName}: ${msg}`, 'info');
+
+        // Browser notification (if enabled and window not focused)
+        if (this.getSetting('browserNotifications') &&
+            Notification.permission === 'granted' &&
+            (document.hidden || !document.hasFocus())) {
+          const notif = new Notification('CWM', {
+            body: `${name}${wsName}: ${msg}`,
+            icon: '/favicon.ico',
+          });
+          notif.onclick = () => {
+            window.focus();
+            if (d.sessionId) {
+              const idx = (this.state.sessions || []).findIndex(s => s.id === d.sessionId);
+              if (idx >= 0) this._navigateToSession(d.sessionId, idx);
+            }
+          };
+        }
+
+        // Flash browser title
+        if (typeof this._flashBrowserTitle === 'function') {
+          this._flashBrowserTitle(name);
+        }
+        break;
+      }
+
       case 'session:created':
       case 'session:deleted':
       case 'session:updated':
