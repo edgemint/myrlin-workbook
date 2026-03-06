@@ -8265,7 +8265,7 @@ class CWMApp {
             <span class="status-dot ${statusClass}"></span>
           </div>
           <div class="session-info">
-            <div class="session-name">${s.name ? this.escapeHtml(s.name) : '<span class="session-name-empty">untitled</span>'} ${flagBadges.join(' ')}</div>
+            <div class="session-name">${s.name ? this.escapeHtml(s.name) : '<span class="session-name-empty">untitled</span>'} ${flagBadges.join(' ')}${this.hookStateBadgeHtml(s)}</div>
             <div class="session-meta-row">
               ${s.workingDir ? `<span class="session-dir" title="${this.escapeHtml(s.workingDir)}">${this.escapeHtml(this.truncatePath(s.workingDir))}</span>` : ''}
               ${s.topic ? `<span class="session-topic">${this.escapeHtml(s.topic)}</span>` : ''}
@@ -8328,7 +8328,7 @@ class CWMApp {
       error: '<span class="status-dot status-dot-error"></span>',
       idle: '<span class="status-dot status-dot-idle"></span>',
     };
-    this.els.detailStatusBadge.innerHTML = `<span class="status-badge status-badge-${status}">${statusIcons[status] || ''} ${statusLabel}</span>`;
+    this.els.detailStatusBadge.innerHTML = `<span class="status-badge status-badge-${status}">${statusIcons[status] || ''} ${statusLabel}</span>${this.hookStateBadgeHtml(session)}`;
 
     // Meta
     const ws = this.state.workspaces.find(w => w.id === session.workspaceId);
@@ -10920,6 +10920,19 @@ class CWMApp {
   /* ═══════════════════════════════════════════════════════════
      UTILITIES
      ═══════════════════════════════════════════════════════════ */
+
+  hookStateBadgeHtml(session) {
+    if (!session.hookState) return '';
+    const labels = {
+      active: 'Active',
+      awaiting_input: 'Awaiting Input',
+      idle: 'Idle',
+      stopped: 'Stopped',
+      error: 'Error',
+    };
+    const label = labels[session.hookState] || session.hookState;
+    return `<span class="hook-state-badge hook-state-${session.hookState}">${label}</span>`;
+  }
 
   escapeHtml(str) {
     if (!str) return '';
@@ -15403,7 +15416,7 @@ class CWMApp {
           <input type="checkbox" class="sm-session-checkbox" data-id="${s.id}" ${checked}>
           <span class="sm-status-dot ${statusClass}"></span>
           <div class="sm-session-info">
-            <span class="sm-session-name${s.name ? '' : ' session-name-empty'}">${s.name ? this.escapeHtml(s.name) : 'untitled'}</span>
+            <span class="sm-session-name${s.name ? '' : ' session-name-empty'}">${s.name ? this.escapeHtml(s.name) : 'untitled'}</span>${this.hookStateBadgeHtml(s)}
             <span class="sm-session-meta">${this.escapeHtml(s.workingDir || '')}</span>
           </div>
           ${wsName ? `<span class="sm-workspace-badge">${this.escapeHtml(wsName)}</span>` : ''}
