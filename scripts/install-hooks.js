@@ -53,7 +53,7 @@ const HOOK_EVENTS = [
 ];
 
 // The URL marker we use to identify CWM-owned hook entries
-const CWM_MARKER = `/hooks/`;
+const CWM_MARKER = `localhost:${PORT}/hooks/`;
 
 // ─── Load settings.json ─────────────────────────────────────
 
@@ -136,7 +136,9 @@ function main() {
     fs.mkdirSync(claudeDir, { recursive: true });
   }
 
-  fs.writeFileSync(SETTINGS_PATH, output, 'utf8');
+  const tmpPath = SETTINGS_PATH + '.tmp';
+  fs.writeFileSync(tmpPath, output, 'utf8');
+  fs.renameSync(tmpPath, SETTINGS_PATH);
 
   if (REMOVE) {
     console.log(`Removed CWM hooks from ${SETTINGS_PATH}`);
