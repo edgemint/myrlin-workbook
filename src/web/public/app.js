@@ -1945,6 +1945,9 @@ class CWMApp {
 
 
   async init() {
+    // Register service worker for browser notification actions
+    this._registerServiceWorker();
+
     // Restore sidebar width & collapse state from localStorage
     this.restoreSidebarState();
 
@@ -8027,23 +8030,7 @@ class CWMApp {
         }
 
         // Browser notification (if enabled and window not focused)
-        if (this.getSetting('browserNotifications') &&
-            Notification.permission === 'granted' &&
-            (document.hidden || !document.hasFocus())) {
-          const notif = new Notification('CWM', {
-            body: `${name}${wsName}: ${msg}`,
-            icon: '/favicon.ico',
-          });
-          notif.onclick = () => {
-            window.focus();
-            if (d.sessionId) {
-              const slotIdx = this.terminalPanes
-                ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === d.sessionId)
-                : -1;
-              this._navigateToSession(d.sessionId, slotIdx);
-            }
-          };
-        }
+        this._showBrowserNotification(`${name}${wsName}: ${msg}`, d.sessionId || null);
 
         // Flash browser title
         if (typeof this._flashBrowserTitle === 'function') {
@@ -10418,16 +10405,7 @@ class CWMApp {
     // OS-level browser notification: fire whenever the window is not focused,
     // regardless of which pane is active. If the user has the app in the background,
     // they always want to know — even for the "active" terminal slot.
-    if (this.getSetting('browserNotifications') && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
-      const notif = new Notification('CWM', {
-        body: `${qualifiedName} is ready for input`,
-        icon: '/favicon.ico',
-      });
-      notif.onclick = () => {
-        window.focus();
-        this._navigateToSession(sessionId, sessionIdx);
-      };
-    }
+    this._showBrowserNotification(`${qualifiedName} is ready for input`, sessionId, sessionIdx);
   }
 
   /**
@@ -10435,6 +10413,51 @@ class CWMApp {
    * isn't focused. Alternates between the notification and original title.
    * Stops when the window regains focus.
    */
+  _registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      this._swRegistration = reg;
+    }).catch(() => {});
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'notification-click') {
+        window.focus();
+        if (event.data.sessionId) {
+          const idx = event.data.sessionIdx != null ? event.data.sessionIdx
+            : (this.terminalPanes ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === event.data.sessionId) : -1);
+          this._navigateToSession(event.data.sessionId, idx);
+        }
+      }
+    });
+  }
+
+  _showBrowserNotification(body, sessionId, sessionIdx) {
+    if (!this.getSetting('browserNotifications') || Notification.permission !== 'granted') return;
+    if (!document.hidden && document.hasFocus()) return;
+
+    const data = { sessionId: sessionId || null, sessionIdx: sessionIdx != null ? sessionIdx : null };
+    const options = {
+      body,
+      icon: '/favicon.ico',
+      data,
+      actions: sessionId ? [{ action: 'go-to-session', title: 'Go to session' }] : [],
+    };
+
+    if (this._swRegistration) {
+      this._swRegistration.showNotification('CWM', options);
+    } else {
+      // Fallback: plain notification without action buttons
+      const notif = new Notification('CWM', { body, icon: '/favicon.ico' });
+      notif.onclick = () => {
+        window.focus();
+        if (sessionId) {
+          const idx = sessionIdx != null ? sessionIdx
+            : (this.terminalPanes ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === sessionId) : -1);
+          this._navigateToSession(sessionId, idx);
+        }
+      };
+    }
+  }
+
   _flashBrowserTitle(sessionName) {
     // Only flash if window is not focused
     if (document.hasFocus()) return;
