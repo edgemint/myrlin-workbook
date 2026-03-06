@@ -1,8 +1,8 @@
 /**
  * Express Router for Claude Code HTTP hook endpoints.
  *
- * Claude Code calls these URLs on lifecycle events (SessionStart,
- * PreToolUse, PostToolUse, Notification, Stop, SubagentStop).
+ * Claude Code calls these URLs on lifecycle events. A single catch-all
+ * route accepts any event slug, logs it, and returns { ok: true }.
  * No auth required — these are localhost-only calls from Claude Code.
  *
  * Mount with: app.use('/hooks', hooksRouter);
@@ -28,12 +28,24 @@ const C = {
 };
 
 const EVENT_COLORS = {
-  'session-start':  C.green,
-  'pre-tool-use':   C.yellow,
-  'post-tool-use':  C.cyan,
-  'notification':   C.blue,
-  'stop':           C.magenta,
-  'subagent-stop':  C.red,
+  'session-start':        C.green,
+  'instructions-loaded':  C.green,
+  'user-prompt-submit':   C.cyan,
+  'pre-tool-use':         C.yellow,
+  'permission-request':   C.yellow,
+  'post-tool-use':        C.cyan,
+  'post-tool-use-failure': C.red,
+  'notification':         C.blue,
+  'subagent-start':       C.magenta,
+  'subagent-stop':        C.red,
+  'teammate-idle':        C.gray,
+  'task-completed':       C.green,
+  'config-change':        C.blue,
+  'worktree-create':      C.cyan,
+  'worktree-remove':      C.yellow,
+  'pre-compact':          C.gray,
+  'stop':                 C.magenta,
+  'session-end':          C.magenta,
 };
 
 /**
@@ -75,34 +87,11 @@ function truncateDeep(obj, maxLen) {
 }
 
 // ─── Hook Endpoints ─────────────────────────────────────────
+// Single catch-all route: accepts any event slug. This is intentionally
+// permissive — if Claude adds new events, no code change is needed here.
 
-router.post('/session-start', (req, res) => {
-  logHookEvent('session-start', req.body || {});
-  res.json({ ok: true });
-});
-
-router.post('/pre-tool-use', (req, res) => {
-  logHookEvent('pre-tool-use', req.body || {});
-  res.json({ ok: true });
-});
-
-router.post('/post-tool-use', (req, res) => {
-  logHookEvent('post-tool-use', req.body || {});
-  res.json({ ok: true });
-});
-
-router.post('/notification', (req, res) => {
-  logHookEvent('notification', req.body || {});
-  res.json({ ok: true });
-});
-
-router.post('/stop', (req, res) => {
-  logHookEvent('stop', req.body || {});
-  res.json({ ok: true });
-});
-
-router.post('/subagent-stop', (req, res) => {
-  logHookEvent('subagent-stop', req.body || {});
+router.post('/:event', (req, res) => {
+  logHookEvent(req.params.event, req.body || {});
   res.json({ ok: true });
 });
 

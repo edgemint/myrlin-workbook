@@ -3,7 +3,7 @@
  * Install Claude Code HTTP hooks pointing at the CWM server.
  *
  * Reads ~/.claude/settings.json, merges the hook config for all
- * six Claude Code events, and writes it back. Idempotent — safe
+ * 18 Claude Code events, and writes it back. Idempotent — safe
  * to run multiple times.
  *
  * Usage:
@@ -53,12 +53,24 @@ const RELAY_SCRIPT = path.join(__dirname, 'hook-relay.js').replace(/\\/g, '/');
 
 // Maps Claude Code event name → URL slug
 const HOOK_EVENTS = [
-  { event: 'SessionStart',  slug: 'session-start'  },
-  { event: 'PreToolUse',    slug: 'pre-tool-use'   },
-  { event: 'PostToolUse',   slug: 'post-tool-use'  },
-  { event: 'Notification',  slug: 'notification'   },
-  { event: 'Stop',          slug: 'stop'           },
-  { event: 'SubagentStop',  slug: 'subagent-stop'  },
+  { event: 'SessionStart',       slug: 'session-start'        },
+  { event: 'InstructionsLoaded', slug: 'instructions-loaded'  },
+  { event: 'UserPromptSubmit',   slug: 'user-prompt-submit'   },
+  { event: 'PreToolUse',         slug: 'pre-tool-use'         },
+  { event: 'PermissionRequest',  slug: 'permission-request'   },
+  { event: 'PostToolUse',        slug: 'post-tool-use'        },
+  { event: 'PostToolUseFailure', slug: 'post-tool-use-failure' },
+  { event: 'Notification',       slug: 'notification'         },
+  { event: 'SubagentStart',      slug: 'subagent-start'       },
+  { event: 'SubagentStop',       slug: 'subagent-stop'        },
+  { event: 'TeammateIdle',       slug: 'teammate-idle'        },
+  { event: 'TaskCompleted',      slug: 'task-completed'       },
+  { event: 'ConfigChange',       slug: 'config-change'        },
+  { event: 'WorktreeCreate',     slug: 'worktree-create'      },
+  { event: 'WorktreeRemove',     slug: 'worktree-remove'      },
+  { event: 'PreCompact',         slug: 'pre-compact'          },
+  { event: 'Stop',               slug: 'stop'                 },
+  { event: 'SessionEnd',         slug: 'session-end'          },
 ];
 
 // The string marker used to identify CWM-owned hook entries.
