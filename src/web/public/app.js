@@ -7775,8 +7775,11 @@ class CWMApp {
         // In-app toast with action button to navigate to the session
         if (d.sessionId) {
           this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
-            const idx = (this.state.sessions || []).findIndex(s => s.id === d.sessionId);
-            if (idx >= 0) this._navigateToSession(d.sessionId, idx);
+            // Find the terminal pane slot for this session (-1 triggers cross-group search)
+            const slotIdx = this.terminalPanes
+              ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === d.sessionId)
+              : -1;
+            this._navigateToSession(d.sessionId, slotIdx);
           });
         } else {
           this.showToast(`${name}${wsName}: ${msg}`, 'info');
@@ -7793,8 +7796,10 @@ class CWMApp {
           notif.onclick = () => {
             window.focus();
             if (d.sessionId) {
-              const idx = (this.state.sessions || []).findIndex(s => s.id === d.sessionId);
-              if (idx >= 0) this._navigateToSession(d.sessionId, idx);
+              const slotIdx = this.terminalPanes
+                ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === d.sessionId)
+                : -1;
+              this._navigateToSession(d.sessionId, slotIdx);
             }
           };
         }
