@@ -4453,49 +4453,63 @@ class CWMApp {
       <div class="settings-category-label">Hook Notifications</div>
       <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:10px 0;">
         <div class="settings-row-desc" style="margin:0;">Configure which Claude Code events trigger browser notifications.</div>
-        <label class="settings-toggle">
-          <input type="checkbox" data-hook-notif="enabled">
-          <span class="settings-toggle-track"></span>
-          <span class="settings-toggle-thumb"></span>
-          <span style="margin-left:8px;">Enable Hook Notifications</span>
-        </label>
-        <div class="hook-notif-triggers" style="margin-left:16px;display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
           <label class="settings-toggle">
-            <input type="checkbox" data-hook-trigger="awaiting_input">
+            <input type="checkbox" data-hook-notif="enabled">
             <span class="settings-toggle-track"></span>
             <span class="settings-toggle-thumb"></span>
-            <span style="margin-left:8px;">Awaiting Input — Claude finished, waiting for you</span>
           </label>
-          <label class="settings-toggle">
-            <input type="checkbox" data-hook-trigger="permission_needed">
-            <span class="settings-toggle-track"></span>
-            <span class="settings-toggle-thumb"></span>
-            <span style="margin-left:8px;">Permission Needed — Claude needs tool approval</span>
-          </label>
-          <label class="settings-toggle">
-            <input type="checkbox" data-hook-trigger="task_completed">
-            <span class="settings-toggle-track"></span>
-            <span class="settings-toggle-thumb"></span>
-            <span style="margin-left:8px;">Task Completed — a task was marked done</span>
-          </label>
-          <label class="settings-toggle">
-            <input type="checkbox" data-hook-trigger="tool_failure">
-            <span class="settings-toggle-track"></span>
-            <span class="settings-toggle-thumb"></span>
-            <span style="margin-left:8px;">Tool Failure — a tool call failed</span>
-          </label>
-          <label class="settings-toggle">
-            <input type="checkbox" data-hook-trigger="session_error">
-            <span class="settings-toggle-track"></span>
-            <span class="settings-toggle-thumb"></span>
-            <span style="margin-left:8px;">Session Error — repeated failures detected</span>
-          </label>
-          <label class="settings-toggle">
-            <input type="checkbox" data-hook-trigger="idle">
-            <span class="settings-toggle-track"></span>
-            <span class="settings-toggle-thumb"></span>
-            <span style="margin-left:8px;">Session Idle — no activity for timeout period</span>
-          </label>
+          <span style="font-size:13px;">Enable Hook Notifications</span>
+        </div>
+        <div class="hook-notif-triggers" style="margin-left:16px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="settings-toggle">
+              <input type="checkbox" data-hook-trigger="awaiting_input">
+              <span class="settings-toggle-track"></span>
+              <span class="settings-toggle-thumb"></span>
+            </label>
+            <span style="font-size:13px;">Awaiting Input — Claude finished, waiting for you</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="settings-toggle">
+              <input type="checkbox" data-hook-trigger="permission_needed">
+              <span class="settings-toggle-track"></span>
+              <span class="settings-toggle-thumb"></span>
+            </label>
+            <span style="font-size:13px;">Permission Needed — Claude needs tool approval</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="settings-toggle">
+              <input type="checkbox" data-hook-trigger="task_completed">
+              <span class="settings-toggle-track"></span>
+              <span class="settings-toggle-thumb"></span>
+            </label>
+            <span style="font-size:13px;">Task Completed — a task was marked done</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="settings-toggle">
+              <input type="checkbox" data-hook-trigger="tool_failure">
+              <span class="settings-toggle-track"></span>
+              <span class="settings-toggle-thumb"></span>
+            </label>
+            <span style="font-size:13px;">Tool Failure — a tool call failed</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="settings-toggle">
+              <input type="checkbox" data-hook-trigger="session_error">
+              <span class="settings-toggle-track"></span>
+              <span class="settings-toggle-thumb"></span>
+            </label>
+            <span style="font-size:13px;">Session Error — repeated failures detected</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="settings-toggle">
+              <input type="checkbox" data-hook-trigger="idle">
+              <span class="settings-toggle-track"></span>
+              <span class="settings-toggle-thumb"></span>
+            </label>
+            <span style="font-size:13px;">Session Idle — no activity for timeout period</span>
+          </div>
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px;">
             <label style="font-size:12px;">Idle timeout:</label>
             <input type="number" min="1" max="60" data-hook-notif="idleTimeoutMinutes"
