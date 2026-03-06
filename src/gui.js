@@ -64,6 +64,13 @@ writePid();
 
 const store = getStore();
 
+// ─── Recovery: mark stale sessions as stopped ─────────────
+const { markStaleSessionsStopped } = require('./core/recovery');
+const staleIds = markStaleSessionsStopped();
+if (staleIds.length > 0) {
+  console.log(`[recovery] ${staleIds.length} session(s) had dead PIDs and were marked stopped.`);
+}
+
 // ─── Demo Data Seeding ─────────────────────────────────────
 
 if (process.argv.includes('--demo')) {
