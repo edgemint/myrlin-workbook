@@ -49,6 +49,7 @@ class HookStateManager {
     this._broadcastSSE = broadcastSSE;
     this._idleTimers = new Map();       // claudeSessionId → timeoutId
     this._failureWindows = new Map();   // claudeSessionId → [timestamp, ...]
+    this._liveSessionMap = new Map();   // claudeSessionId → managed session id (set on session-start)
 
     this._hookBus.on('hook', (event) => this._handleHookEvent(event));
   }
@@ -62,10 +63,16 @@ class HookStateManager {
     // Find the matching managed session
     const session = this._findSession(claudeSessionId, cwd);
 
+    // On session-start, cache the mapping so subsequent hooks resolve instantly
+    if (slug === 'session-start' && session) {
+      this._liveSessionMap.set(claudeSessionId, session.id);
+    }
+
     if (slug === 'session-end') {
       this._transition(session, claudeSessionId, 'stopped', slug, payload);
       this._clearIdleTimer(claudeSessionId);
       this._failureWindows.delete(claudeSessionId);
+      this._liveSessionMap.delete(claudeSessionId);
       return;
     }
 
@@ -115,24 +122,54 @@ class HookStateManager {
 
   /**
    * Find a managed session matching the given Claude session ID.
-   * Falls back to matching by cwd if no resumeSessionId match.
+   *
+   * Priority order:
+   * 1. Cached live mapping (set on session-start, most reliable)
+   * 2. Unique resumeSessionId match
+   * 3. Among multiple resumeSessionId matches, prefer the running one
+   * 4. cwd match, preferring running sessions
    */
   _findSession(claudeSessionId, cwd) {
     const store = getStore();
     const sessions = Object.values(store.sessions);
 
-    // Primary: match by resumeSessionId
-    const byResume = sessions.find(s => s.resumeSessionId === claudeSessionId);
-    if (byResume) return byResume;
+    // 1. Check cached live mapping first (set during session-start)
+    const cachedId = this._liveSessionMap.get(claudeSessionId);
+    if (cachedId) {
+      const cached = store.sessions[cachedId];
+      if (cached) return cached;
+      // Stale entry — clean up
+      this._liveSessionMap.delete(claudeSessionId);
+    }
 
-    // Secondary: match by cwd (for discovered sessions that were dragged in)
+    // 2. Match by resumeSessionId
+    const byResume = sessions.filter(s => s.resumeSessionId === claudeSessionId);
+    if (byResume.length === 1) return byResume[0];
+    if (byResume.length > 1) {
+      // Prefer the running session (has pid or status=running)
+      const running = byResume.find(s => s.pid || s.status === 'running');
+      if (running) return running;
+      // Fall back to most recently active
+      return byResume.sort((a, b) =>
+        (b.lastActive || b.createdAt || '').localeCompare(a.lastActive || a.createdAt || '')
+      )[0];
+    }
+
+    // 3. Fall back to cwd match, preferring running sessions
     if (cwd) {
       const normalizedCwd = cwd.replace(/\\/g, '/').toLowerCase();
-      const byCwd = sessions.find(s =>
+      const byCwd = sessions.filter(s =>
         s.workingDir &&
         s.workingDir.replace(/\\/g, '/').toLowerCase() === normalizedCwd
       );
-      if (byCwd) return byCwd;
+      if (byCwd.length === 1) return byCwd[0];
+      if (byCwd.length > 1) {
+        const running = byCwd.find(s => s.pid || s.status === 'running');
+        if (running) return running;
+        return byCwd.sort((a, b) =>
+          (b.lastActive || b.createdAt || '').localeCompare(a.lastActive || a.createdAt || '')
+        )[0];
+      }
     }
 
     return null;
