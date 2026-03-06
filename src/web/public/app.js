@@ -7772,8 +7772,15 @@ class CWMApp {
         const wsName = d.workspaceName ? ` (${d.workspaceName})` : '';
         const msg = d.message || 'needs attention';
 
-        // In-app toast
-        this.showToast(`${name}${wsName}: ${msg}`, 'info');
+        // In-app toast with action button to navigate to the session
+        if (d.sessionId) {
+          this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
+            const idx = (this.state.sessions || []).findIndex(s => s.id === d.sessionId);
+            if (idx >= 0) this._navigateToSession(d.sessionId, idx);
+          });
+        } else {
+          this.showToast(`${name}${wsName}: ${msg}`, 'info');
+        }
 
         // Browser notification (if enabled and window not focused)
         if (this.getSetting('browserNotifications') &&
