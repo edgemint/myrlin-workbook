@@ -2639,7 +2639,7 @@ class CWMApp {
             tp.sessionName = result.name;
             const paneEl = document.getElementById(`term-pane-${i}`);
             const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) titleEl.textContent = result.name;
+            if (titleEl) { titleEl.textContent = result.name; titleEl.classList.remove('session-name-empty'); }
           }
         }
       }
@@ -3525,7 +3525,7 @@ class CWMApp {
             tp.sessionName = data.title;
             const paneEl = document.getElementById(`term-pane-${i}`);
             const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) titleEl.textContent = data.title;
+            if (titleEl) { titleEl.textContent = data.title; titleEl.classList.remove('session-name-empty'); }
           }
         }
       }
@@ -3555,7 +3555,7 @@ class CWMApp {
             tp.sessionName = data.title;
             const paneEl = document.getElementById(`term-pane-${i}`);
             const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) titleEl.textContent = data.title;
+            if (titleEl) { titleEl.textContent = data.title; titleEl.classList.remove('session-name-empty'); }
           }
         }
       }
@@ -8963,8 +8963,9 @@ class CWMApp {
         }
 
         // Click-to-focus: clicking/tapping anywhere in a pane focuses its terminal
-        const focusPane = () => {
+        const focusPane = (e) => {
           if (this.terminalPanes[slotIdx]) {
+            console.log(`[NAV-DEBUG] mousedown/touchstart on slot ${slotIdx}, type=${e.type}`);
             this.setActiveTerminalPane(slotIdx);
           }
         };
@@ -8973,9 +8974,13 @@ class CWMApp {
 
         // focusin: when any child element (like xterm's textarea) gains focus,
         // switch the active pane. This catches focus from click, tab, or programmatic focus.
-        pane.addEventListener('focusin', () => {
-          if (this._suppressFocusin) return;
+        pane.addEventListener('focusin', (e) => {
+          if (this._suppressFocusin) {
+            console.log(`[NAV-DEBUG] focusin SUPPRESSED on slot ${slotIdx}`);
+            return;
+          }
           if (this._activeTerminalSlot !== slotIdx && this.terminalPanes[slotIdx]) {
+            console.log(`[NAV-DEBUG] focusin ACTIVATING slot ${slotIdx} (was ${this._activeTerminalSlot})`, new Error().stack);
             this.setActiveTerminalPane(slotIdx);
           }
         });
@@ -9976,6 +9981,7 @@ class CWMApp {
    * @param {number} activeSlotIdx - Index in this.terminalPanes (-1 if not in active group)
    */
   _navigateToSession(sessionId, activeSlotIdx) {
+    console.log(`[NAV-DEBUG] _navigateToSession called: sessionId=${sessionId}, activeSlotIdx=${activeSlotIdx}, activeGroup=${this._activeGroupId}`);
     // Ensure terminal view is visible
     if (this.state.viewMode !== 'terminal') {
       this.setViewMode('terminal');
@@ -9986,25 +9992,30 @@ class CWMApp {
     if (activeSlotIdx !== -1) {
       const tp = this.terminalPanes && this.terminalPanes[activeSlotIdx];
       if (!tp || tp.sessionId !== sessionId) {
+        console.log(`[NAV-DEBUG] Stale slot ${activeSlotIdx}: tp=${!!tp}, tp.sessionId=${tp?.sessionId}, recomputing...`);
         // Stale index — recompute from current active group
         activeSlotIdx = this.terminalPanes
           ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
           : -1;
+        console.log(`[NAV-DEBUG] Recomputed to ${activeSlotIdx}`);
       }
     }
 
     // Session is already in the active group — just focus its pane
     if (activeSlotIdx !== -1) {
+      console.log(`[NAV-DEBUG] Same-group path: focusing slot ${activeSlotIdx}`);
       this.setActiveTerminalPane(activeSlotIdx);
       return;
     }
 
     // Session is in a different tab group — find and switch to it
+    console.log(`[NAV-DEBUG] Cross-group path: searching _tabGroups...`);
     if (!this._tabGroups) return;
     for (const group of this._tabGroups) {
       if (group.id === this._activeGroupId) continue;
       const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
       if (paneEntry) {
+        console.log(`[NAV-DEBUG] Found in group ${group.id}, paneEntry.slot=${paneEntry.slot}`);
         // Suppress focusin during group switch to prevent DOM reattachment
         // from auto-focusing the wrong pane (e.g. slot 0's previously-focused
         // xterm textarea) before we can set the correct one.
@@ -10016,8 +10027,10 @@ class CWMApp {
         const restoredSlot = this.terminalPanes
           ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
           : paneEntry.slot;
+        console.log(`[NAV-DEBUG] After switchGroup: restoredSlot=${restoredSlot}, panes=[${this.terminalPanes.map((p,i) => p ? `${i}:${p.sessionId?.substring(0,8)}` : `${i}:null`).join(', ')}]`);
         this.setActiveTerminalPane(restoredSlot !== -1 ? restoredSlot : paneEntry.slot);
         this._suppressFocusin = false;
+        console.log(`[NAV-DEBUG] _suppressFocusin cleared, _activeTerminalSlot=${this._activeTerminalSlot}`);
 
         // Double-RAF: reinforce focus after xterm refresh and safeFit complete,
         // in case layout reflows shift focus away.
@@ -10025,6 +10038,7 @@ class CWMApp {
           const freshSlot = this.terminalPanes
             ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
             : -1;
+          console.log(`[NAV-DEBUG] Double-RAF reinforcement: freshSlot=${freshSlot}, current _activeTerminalSlot=${this._activeTerminalSlot}`);
           if (freshSlot !== -1) this.setActiveTerminalPane(freshSlot);
         }); });
         return;
@@ -10041,6 +10055,7 @@ class CWMApp {
    * Set the active terminal pane - blurs all others, focuses target, highlights it.
    */
   setActiveTerminalPane(slotIdx) {
+    console.log(`[NAV-DEBUG] setActiveTerminalPane(${slotIdx}) called from:`, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     // Set slot early to prevent focusin recursion
     this._activeTerminalSlot = slotIdx;
 
@@ -11668,7 +11683,7 @@ class CWMApp {
             paneEl.hidden = false;
             paneEl.classList.remove('terminal-pane-empty');
             const titleEl = paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) titleEl.textContent = cached.panes[i].sessionName || cached.panes[i].sessionId;
+            if (titleEl) { titleEl.textContent = cached.panes[i].sessionName || cached.panes[i].sessionId; titleEl.classList.remove('session-name-empty'); }
             const closeBtn = paneEl.querySelector('.terminal-pane-close');
             if (closeBtn) closeBtn.hidden = false;
             const uploadBtn = paneEl.querySelector('.terminal-pane-upload');
