@@ -2935,8 +2935,7 @@ textarea.input {
     height: var(--vh, 100dvh);
   }
 
-  #workspace-list { min-height: 0; overflow-y: auto; }
-  #projects-list { min-height: 0; max-height: 200px; overflow-y: auto; }
+  #projects-list { min-height: 0; overflow-y: auto; flex: 1; }
 
   .sidebar-resize-handle { display: none; }
   .sidebar-collapse-bar { display: none; }
