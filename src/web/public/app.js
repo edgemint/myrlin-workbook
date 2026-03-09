@@ -7682,9 +7682,7 @@ class CWMApp {
         this._markNotificationRead(id);
         const sid = el.dataset.sessionId;
         if (sid) {
-          const slotIdx = this.terminalPanes
-            ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === sid)
-            : -1;
+          const slotIdx = this._findTerminalPaneIndex(sid);
           this._navigateToSession(sid, slotIdx);
           this.closeNotificationCenter();
         }
@@ -7797,9 +7795,8 @@ class CWMApp {
         if (d.sessionId) {
           const toast = this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
             // Find the terminal pane slot for this session (-1 triggers cross-group search)
-            const slotIdx = this.terminalPanes
-              ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === d.sessionId)
-              : -1;
+            // Checks both managed sessionId and claudeSessionId to handle UUID mismatches
+            const slotIdx = this._findTerminalPaneIndex(d.sessionId);
             this._navigateToSession(d.sessionId, slotIdx);
           });
           if (toast) toast.dataset.notifId = notifId;
@@ -9102,6 +9099,7 @@ class CWMApp {
       const slotIdx = this.terminalPanes.indexOf(tp);
       if (slotIdx === -1) return;
       tp.sessionName = name || uuid;
+      tp.claudeSessionId = uuid;
       // Update pane title bar
       const paneEl = document.getElementById(`term-pane-${slotIdx}`);
       const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
@@ -9169,7 +9167,7 @@ class CWMApp {
   focusPaneBySessionId(claudeId) {
     // Check active group
     for (let i = 0; i < this.terminalPanes.length; i++) {
-      if (this.terminalPanes[i] && this.terminalPanes[i].sessionId === claudeId) {
+      if (this.terminalPanes[i] && (this.terminalPanes[i].sessionId === claudeId || this.terminalPanes[i].claudeSessionId === claudeId)) {
         this.setViewMode('terminal');
         this.setActiveTerminalPane(i);
         return true;
@@ -9179,7 +9177,7 @@ class CWMApp {
     for (const [groupId, cached] of Object.entries(this._groupPaneCache || {})) {
       const panes = cached.panes || [];
       for (let i = 0; i < panes.length; i++) {
-        if (panes[i] && panes[i].sessionId === claudeId) {
+        if (panes[i] && (panes[i].sessionId === claudeId || panes[i].claudeSessionId === claudeId)) {
           this.setViewMode('terminal');
           this._suppressFocusin = true;
           this.switchTerminalGroup(groupId);
@@ -9861,7 +9859,7 @@ class CWMApp {
         window.focus();
         if (event.data.sessionId) {
           const idx = event.data.sessionIdx != null ? event.data.sessionIdx
-            : (this.terminalPanes ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === event.data.sessionId) : -1);
+            : this._findTerminalPaneIndex(event.data.sessionId);
           this._navigateToSession(event.data.sessionId, idx);
         }
       }
@@ -9889,7 +9887,7 @@ class CWMApp {
         window.focus();
         if (sessionId) {
           const idx = sessionIdx != null ? sessionIdx
-            : (this.terminalPanes ? this.terminalPanes.findIndex(tp => tp && tp.sessionId === sessionId) : -1);
+            : this._findTerminalPaneIndex(sessionId);
           this._navigateToSession(sessionId, idx);
         }
       };
@@ -9960,8 +9958,13 @@ class CWMApp {
     // Find which group this session's pane belongs to
     for (const group of this._tabGroups) {
       if (group.id === this._activeGroupId) continue;
-      const panes = group.panes || [];
-      if (panes.some(p => p && p.sessionId === sessionId)) {
+      // Check persisted panes by managed sessionId, and cached live panes by claudeSessionId too
+      const foundInPanes = (group.panes || []).some(p => p && p.sessionId === sessionId);
+      const cached = this._groupPaneCache && this._groupPaneCache[group.id];
+      const foundInCache = !foundInPanes && cached && (cached.panes || []).some(
+        p => p && (p.sessionId === sessionId || p.claudeSessionId === sessionId)
+      );
+      if (foundInPanes || foundInCache) {
         // Highlight the tab button
         const tabBtn = document.querySelector(`.terminal-group-tab[data-group-id="${group.id}"]`);
         if (tabBtn && !tabBtn.classList.contains('tab-notify')) {
@@ -9971,6 +9974,41 @@ class CWMApp {
         break;
       }
     }
+  }
+
+  /**
+   * Find the index of a terminal pane by either managed sessionId or Claude UUID.
+   * Returns -1 if not found in the active group.
+   */
+  _findTerminalPaneIndex(sessionId) {
+    if (!this.terminalPanes || !sessionId) return -1;
+    // Primary: match by managed session ID
+    const idx = this.terminalPanes.findIndex(p => p && p.sessionId === sessionId);
+    if (idx !== -1) return idx;
+    // Fallback: match by Claude session UUID
+    return this.terminalPanes.findIndex(p => p && p.claudeSessionId === sessionId);
+  }
+
+  /**
+   * Find a pane entry in a group by sessionId or claudeSessionId.
+   * Checks persisted group.panes first, then the live cached TerminalPane objects.
+   * Returns a pane-entry-compatible object (with .slot) or null.
+   */
+  _findPaneInGroup(group, sessionId) {
+    // Check persisted layout panes first
+    const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
+    if (paneEntry) return paneEntry;
+    // Check cached live TerminalPane objects for Claude UUID match
+    const cached = this._groupPaneCache && this._groupPaneCache[group.id];
+    if (cached && cached.panes) {
+      for (let i = 0; i < cached.panes.length; i++) {
+        const tp = cached.panes[i];
+        if (tp && (tp.sessionId === sessionId || tp.claudeSessionId === sessionId)) {
+          return { slot: i, sessionId: tp.sessionId, sessionName: tp.sessionName };
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -9991,12 +10029,10 @@ class CWMApp {
     // captured at notification creation time rather than click time.
     if (activeSlotIdx !== -1) {
       const tp = this.terminalPanes && this.terminalPanes[activeSlotIdx];
-      if (!tp || tp.sessionId !== sessionId) {
+      if (!tp || (tp.sessionId !== sessionId && tp.claudeSessionId !== sessionId)) {
         console.log(`[NAV-DEBUG] Stale slot ${activeSlotIdx}: tp=${!!tp}, tp.sessionId=${tp?.sessionId}, recomputing...`);
-        // Stale index — recompute from current active group
-        activeSlotIdx = this.terminalPanes
-          ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
-          : -1;
+        // Stale index — recompute from current active group (checks both sessionId and claudeSessionId)
+        activeSlotIdx = this._findTerminalPaneIndex(sessionId);
         console.log(`[NAV-DEBUG] Recomputed to ${activeSlotIdx}`);
       }
     }
@@ -10013,7 +10049,7 @@ class CWMApp {
     if (!this._tabGroups) return;
     for (const group of this._tabGroups) {
       if (group.id === this._activeGroupId) continue;
-      const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
+      const paneEntry = this._findPaneInGroup(group, sessionId);
       if (paneEntry) {
         console.log(`[NAV-DEBUG] Found in group ${group.id}, paneEntry.slot=${paneEntry.slot}`);
         // Suppress focusin during group switch to prevent DOM reattachment
@@ -10024,9 +10060,7 @@ class CWMApp {
 
         // Focus the correct pane immediately — panes are already restored from
         // cache at this point. This prevents the brief flash of the wrong pane.
-        const restoredSlot = this.terminalPanes
-          ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
-          : paneEntry.slot;
+        const restoredSlot = this._findTerminalPaneIndex(sessionId);
         console.log(`[NAV-DEBUG] After switchGroup: restoredSlot=${restoredSlot}, panes=[${this.terminalPanes.map((p,i) => p ? `${i}:${p.sessionId?.substring(0,8)}` : `${i}:null`).join(', ')}]`);
         this.setActiveTerminalPane(restoredSlot !== -1 ? restoredSlot : paneEntry.slot);
         this._suppressFocusin = false;
@@ -10035,9 +10069,7 @@ class CWMApp {
         // Double-RAF: reinforce focus after xterm refresh and safeFit complete,
         // in case layout reflows shift focus away.
         requestAnimationFrame(() => { requestAnimationFrame(() => {
-          const freshSlot = this.terminalPanes
-            ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
-            : -1;
+          const freshSlot = this._findTerminalPaneIndex(sessionId);
           console.log(`[NAV-DEBUG] Double-RAF reinforcement: freshSlot=${freshSlot}, current _activeTerminalSlot=${this._activeTerminalSlot}`);
           if (freshSlot !== -1) this.setActiveTerminalPane(freshSlot);
         }); });
@@ -11752,6 +11784,7 @@ class CWMApp {
         group.panes.push({
           slot: i,
           sessionId: this.terminalPanes[i].sessionId,
+          claudeSessionId: this.terminalPanes[i].claudeSessionId || null,
           sessionName: this.terminalPanes[i].sessionName,
           spawnOpts: this.terminalPanes[i].spawnOpts || {},
         });

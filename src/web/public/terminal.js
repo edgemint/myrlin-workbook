@@ -221,6 +221,7 @@ class TerminalPane {
   constructor(containerId, sessionId, sessionName, spawnOpts) {
     this.containerId = containerId;
     this.sessionId = sessionId;
+    this.claudeSessionId = null; // Set when the Claude UUID is detected via onUuidDetected
     this.sessionName = sessionName || 'Terminal';
     this.spawnOpts = spawnOpts || {}; // Extra params for PTY spawn (cwd, resumeSessionId, etc.)
     this.term = null;
