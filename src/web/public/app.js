@@ -157,6 +157,7 @@ class CWMApp {
     // ─── Terminal panes ──────────────────────────────────────────
     this.terminalPanes = new Array(CWMApp.MAX_PANES).fill(null);
     this._activeTerminalSlot = null;
+    this._suppressFocusin = false; // Set during group switches to prevent DOM reattachment focus races
     // Cache of TerminalPane instances per group to avoid reconnection on tab switch.
     // Key: groupId, Value: { panes: [TerminalPane|null x MAX_PANES], domFragments: [DocumentFragment|null x MAX_PANES] }
     this._groupPaneCache = {};
@@ -8973,6 +8974,7 @@ class CWMApp {
         // focusin: when any child element (like xterm's textarea) gains focus,
         // switch the active pane. This catches focus from click, tab, or programmatic focus.
         pane.addEventListener('focusin', () => {
+          if (this._suppressFocusin) return;
           if (this._activeTerminalSlot !== slotIdx && this.terminalPanes[slotIdx]) {
             this.setActiveTerminalPane(slotIdx);
           }
@@ -9174,10 +9176,16 @@ class CWMApp {
       for (let i = 0; i < panes.length; i++) {
         if (panes[i] && panes[i].sessionId === claudeId) {
           this.setViewMode('terminal');
+          this._suppressFocusin = true;
           this.switchTerminalGroup(groupId);
-          // Give switchTerminalGroup time to restore panes before focusing
+          // Focus immediately — panes are restored from cache at this point
+          this.setActiveTerminalPane(i);
+          this._suppressFocusin = false;
+          // Reinforce after xterm refresh/safeFit complete
           const paneIndex = i;
-          setTimeout(() => this.setActiveTerminalPane(paneIndex), 100);
+          requestAnimationFrame(() => { requestAnimationFrame(() => {
+            this.setActiveTerminalPane(paneIndex);
+          }); });
           return true;
         }
       }
@@ -9997,11 +10005,27 @@ class CWMApp {
       if (group.id === this._activeGroupId) continue;
       const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
       if (paneEntry) {
+        // Suppress focusin during group switch to prevent DOM reattachment
+        // from auto-focusing the wrong pane (e.g. slot 0's previously-focused
+        // xterm textarea) before we can set the correct one.
+        this._suppressFocusin = true;
         this.switchTerminalGroup(group.id);
-        // Double-RAF: first frame lets switchTerminalGroup's internal RAF (xterm refresh) complete,
-        // second frame focuses the pane after the canvas is fully painted.
+
+        // Focus the correct pane immediately — panes are already restored from
+        // cache at this point. This prevents the brief flash of the wrong pane.
+        const restoredSlot = this.terminalPanes
+          ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
+          : paneEntry.slot;
+        this.setActiveTerminalPane(restoredSlot !== -1 ? restoredSlot : paneEntry.slot);
+        this._suppressFocusin = false;
+
+        // Double-RAF: reinforce focus after xterm refresh and safeFit complete,
+        // in case layout reflows shift focus away.
         requestAnimationFrame(() => { requestAnimationFrame(() => {
-          this.setActiveTerminalPane(paneEntry.slot);
+          const freshSlot = this.terminalPanes
+            ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
+            : -1;
+          if (freshSlot !== -1) this.setActiveTerminalPane(freshSlot);
         }); });
         return;
       }
