@@ -10548,6 +10548,18 @@ class CWMApp {
       this.setViewMode('terminal');
     }
 
+    // Verify the slot index is still valid — callers may pass a stale index
+    // captured at notification creation time rather than click time.
+    if (activeSlotIdx !== -1) {
+      const tp = this.terminalPanes && this.terminalPanes[activeSlotIdx];
+      if (!tp || tp.sessionId !== sessionId) {
+        // Stale index — recompute from current active group
+        activeSlotIdx = this.terminalPanes
+          ? this.terminalPanes.findIndex(p => p && p.sessionId === sessionId)
+          : -1;
+      }
+    }
+
     // Session is already in the active group — just focus its pane
     if (activeSlotIdx !== -1) {
       this.setActiveTerminalPane(activeSlotIdx);
