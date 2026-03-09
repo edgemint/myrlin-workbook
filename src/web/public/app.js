@@ -9730,16 +9730,7 @@ class CWMApp {
       const paneEl = document.getElementById(`term-pane-${i}`);
       if (paneEl) paneEl.style.gridColumn = '';
     }
-    if (filledCount === 3) {
-      // 2-col grid, 3 panes: last pane spans 2 columns (fills bottom row)
-      for (let i = CWMApp.MAX_PANES - 1; i >= 0; i--) {
-        if (this.terminalPanes[i]) {
-          const paneEl = document.getElementById(`term-pane-${i}`);
-          if (paneEl) paneEl.style.gridColumn = 'span 2';
-          break;
-        }
-      }
-    } else if (filledCount === 5) {
+    if (filledCount === 5) {
       // 3-col grid, 5 panes: last pane on bottom row spans remaining space
       // Find the last filled pane and make it span to fill the row
       let bottomRowPanes = 0;
@@ -10254,8 +10245,12 @@ class CWMApp {
     } else if (filledCount === 2) {
       grid.style.gridTemplateColumns = `${this._gridColSizes[0]}fr ${this._gridColSizes[1]}fr`;
       grid.style.gridTemplateRows = '1fr';
-    } else if (filledCount <= 4) {
-      // 3-4 panes: 2-column grid
+    } else if (filledCount === 3) {
+      // 3 panes: 3 side-by-side columns
+      grid.style.gridTemplateColumns = '1fr 1fr 1fr';
+      grid.style.gridTemplateRows = '1fr';
+    } else if (filledCount === 4) {
+      // 4 panes: 2x2 grid
       grid.style.gridTemplateColumns = `${this._gridColSizes[0]}fr ${this._gridColSizes[1]}fr`;
       grid.style.gridTemplateRows = `${this._gridRowSizes[0]}fr ${this._gridRowSizes[1]}fr`;
     } else {
@@ -10267,7 +10262,7 @@ class CWMApp {
     // Position and show/hide resize handles
     // Column resize only works for 2-col layouts (2-4 panes); 5-6 panes use equal 3-col grid
     if (this._colResizeHandle) {
-      const showCol = filledCount >= 2 && filledCount <= 4;
+      const showCol = filledCount === 2 || filledCount === 4;
       this._colResizeHandle.hidden = !showCol;
       if (showCol) {
         const totalFr = this._gridColSizes[0] + this._gridColSizes[1];
@@ -10276,7 +10271,7 @@ class CWMApp {
       }
     }
     if (this._rowResizeHandle) {
-      const showRow = filledCount >= 3;
+      const showRow = filledCount >= 4;
       this._rowResizeHandle.hidden = !showRow;
       if (showRow) {
         const totalFr = this._gridRowSizes[0] + this._gridRowSizes[1];
