@@ -659,13 +659,15 @@ class CWMApp {
     this.initSidebarSectionResize();
 
     // Workspace / Category creation dropdown
-    this.els.createWorkspaceBtn.addEventListener('click', (e) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      this._renderContextItems('New', [
-        { label: 'New Project', icon: '&#128193;', action: () => this.createWorkspace() },
-        { label: 'New Category', icon: '&#128194;', action: () => this.createGroup() },
-      ], rect.left, rect.bottom + 4);
-    });
+    if (this.els.createWorkspaceBtn) {
+      this.els.createWorkspaceBtn.addEventListener('click', (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        this._renderContextItems('New', [
+          { label: 'New Project', icon: '&#128193;', action: () => this.createWorkspace() },
+          { label: 'New Category', icon: '&#128194;', action: () => this.createGroup() },
+        ], rect.left, rect.bottom + 4);
+      });
+    }
 
     // Session
     this.els.createSessionBtn.addEventListener('click', () => {
@@ -1148,7 +1150,7 @@ class CWMApp {
           if (view === 'more') {
             this.showMoreMenu();
           } else if (view === 'workspace') {
-            this.setViewMode('workspace');
+            this.setViewMode('terminal');
             // Also open sidebar on mobile for workspace access
             if (this.isMobile && !this.state.sidebarOpen) {
               this.toggleSidebar();
@@ -1398,6 +1400,7 @@ class CWMApp {
     // ── WORKSPACE SIDEBAR LIST ───────────────────────────────
     const wsList = this.els.workspaceList;
     let wsLPTimer = null;
+    if (wsList) {
 
     // Click delegation
     wsList.addEventListener('click', (e) => {
@@ -1751,6 +1754,7 @@ class CWMApp {
       const inGroup = groups.find(g => (g.workspaceIds || []).includes(workspaceId));
       if (inGroup) { e.preventDefault(); e.stopPropagation(); this.removeWorkspaceFromGroup(workspaceId); }
     });
+    } // end if (wsList)
 
     // ── SESSION LIST (main panel) ────────────────────────────
     const sessList = this.els.sessionList;
@@ -2249,31 +2253,7 @@ class CWMApp {
     console.log(`[CWM] Migrated ${migratedCount}/${migrations.length} session name(s) from localStorage to server.`);
   }
 
-  async loadWorkspaces() {
-    try {
-      const data = await this.api('GET', '/api/workspaces');
-      let workspaces = data.workspaces || [];
-      // Sort by server-side order if available
-      const order = data.workspaceOrder || [];
-      if (order.length > 0) {
-        const orderMap = {};
-        order.forEach((id, idx) => { orderMap[id] = idx; });
-        workspaces.sort((a, b) => {
-          const ai = orderMap[a.id] !== undefined ? orderMap[a.id] : 9999;
-          const bi = orderMap[b.id] !== undefined ? orderMap[b.id] : 9999;
-          return ai - bi;
-        });
-      }
-      this.state.workspaces = workspaces;
-      // Auto-select first workspace if none active
-      if (!this.state.activeWorkspace && this.state.workspaces.length > 0) {
-        this.state.activeWorkspace = this.state.workspaces[0];
-      }
-      this.renderWorkspaces();
-    } catch (err) {
-      this.showToast('Failed to load projects', 'error');
-    }
-  }
+  async loadWorkspaces() {}
 
   async loadSessions() {
     try {
@@ -2375,82 +2355,11 @@ class CWMApp {
     if (this.state.sidebarOpen) this.toggleSidebar();
   }
 
-  async createWorkspace() {
-    const result = await this.showPromptModal({
-      title: 'New Project',
-      fields: [
-        { key: 'name', label: 'Name', placeholder: 'my-project', required: true },
-        { key: 'description', label: 'Description', placeholder: 'What is this project for?', type: 'textarea' },
-        { key: 'color', label: 'Color', type: 'color' },
-      ],
-      confirmText: 'Create',
-      confirmClass: 'btn-primary',
-    });
+  async createWorkspace() {}
 
-    if (!result) return;
+  async renameWorkspace(id) {}
 
-    try {
-      await this.api('POST', '/api/workspaces', result);
-      this.showToast('Project created', 'success');
-      await this.loadWorkspaces();
-      await this.loadStats();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to create project', 'error');
-    }
-  }
-
-  async renameWorkspace(id) {
-    const ws = this.state.workspaces.find(w => w.id === id);
-    if (!ws) return;
-
-    const result = await this.showPromptModal({
-      title: 'Edit Project',
-      fields: [
-        { key: 'name', label: 'Name', value: ws.name, required: true },
-        { key: 'description', label: 'Description', value: ws.description || '', type: 'textarea' },
-        { key: 'color', label: 'Color', type: 'color', value: ws.color },
-      ],
-      confirmText: 'Save',
-      confirmClass: 'btn-primary',
-    });
-
-    if (!result) return;
-
-    try {
-      await this.api('PUT', `/api/workspaces/${id}`, result);
-      this.showToast('Project updated', 'success');
-      await this.loadWorkspaces();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to update project', 'error');
-    }
-  }
-
-  async deleteWorkspace(id) {
-    const ws = this.state.workspaces.find(w => w.id === id);
-    if (!ws) return;
-
-    const confirmed = await this.showConfirmModal({
-      title: 'Delete Project',
-      message: `Are you sure you want to delete <strong>${this.escapeHtml(ws.name)}</strong>? This will remove the project and unlink all its sessions.`,
-      confirmText: 'Delete',
-      confirmClass: 'btn-danger',
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await this.api('DELETE', `/api/workspaces/${id}`);
-      this.showToast('Project deleted', 'success');
-      if (this.state.activeWorkspace && this.state.activeWorkspace.id === id) {
-        this.state.activeWorkspace = null;
-      }
-      await this.loadWorkspaces();
-      await this.loadSessions();
-      await this.loadStats();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to delete project', 'error');
-    }
-  }
+  async deleteWorkspace(id) {}
 
 
   /**
@@ -4894,71 +4803,10 @@ class CWMApp {
 
   /** Toggle between board and list layout for the tasks view */
   /** Switch sidebar between Projects and Tasks views */
-  setSidebarView(view) {
-    this._sidebarView = view;
-
-    // Update toggle buttons
-    if (this.els.sidebarViewToggle) {
-      this.els.sidebarViewToggle.querySelectorAll('.sidebar-view-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.sidebarView === view);
-      });
-    }
-
-    const isProjects = view === 'projects';
-
-    // Toggle Projects section visibility
-    if (this.els.sidebarProjectsHeader) this.els.sidebarProjectsHeader.hidden = !isProjects;
-    if (this.els.workspaceList) this.els.workspaceList.hidden = !isProjects;
-    if (document.getElementById('sidebar-meta')) document.getElementById('sidebar-meta').hidden = !isProjects;
-
-    // Toggle sidebar tasks visibility
-    if (this.els.sidebarTasksList) {
-      this.els.sidebarTasksList.hidden = isProjects;
-      if (!isProjects) this.renderSidebarTasks();
-    }
-  }
+  setSidebarView(view) {}
 
   /** Render a compact task list in the sidebar */
-  async renderSidebarTasks() {
-    if (!this.els.sidebarTasksList) return;
-
-    try {
-      const data = await this.api('GET', '/api/worktree-tasks');
-      const tasks = data.tasks || [];
-
-      if (tasks.length === 0) {
-        this.els.sidebarTasksList.innerHTML = '<div style="padding:16px;color:var(--overlay0);font-size:12px;text-align:center;">No tasks yet</div>';
-        return;
-      }
-
-      // Sort: running first, then review, then backlog, then completed
-      const order = { running: 0, active: 0, planning: 1, review: 2, backlog: 3, pending: 3, completed: 4, merged: 4, rejected: 5 };
-      tasks.sort((a, b) => (order[a.status] || 4) - (order[b.status] || 4));
-
-      this.els.sidebarTasksList.innerHTML = tasks.map(t => {
-        let dotClass = 'completed';
-        if (t.status === 'running' || t.status === 'active') dotClass = 'busy';
-        else if (t.status === 'planning') dotClass = 'waiting';
-        else if (t.status === 'review') dotClass = 'review';
-        else if (t.status === 'backlog' || t.status === 'pending') dotClass = 'ready';
-
-        const name = t.branch ? t.branch.replace(/^feat\//, '') : (t.description || t.id);
-        return `<div class="task-item" data-task-id="${t.id}" data-session-id="${t.sessionId || ''}" style="padding:6px 12px;">
-          <span class="task-item-dot ${dotClass}"></span>
-          <span class="task-item-branch" style="font-size:12px;">${this.escapeHtml(name)}</span>
-        </div>`;
-      }).join('');
-
-      // Wire click to switch to kanban
-      this.els.sidebarTasksList.querySelectorAll('.task-item').forEach(el => {
-        el.addEventListener('click', () => {
-          this.setViewMode('tasks');
-        });
-      });
-    } catch (_) {
-      this.els.sidebarTasksList.innerHTML = '<div style="padding:16px;color:var(--overlay0);font-size:11px;">Failed to load tasks</div>';
-    }
-  }
+  async renderSidebarTasks() {}
 
   setTasksLayout(layout) {
     this._tasksLayout = layout;
@@ -5067,7 +4915,7 @@ class CWMApp {
           const session = (this.state.allSessions || []).find(s => s.id === sessionId);
           if (session) {
             this.state.selectedSession = session;
-            this.setViewMode('workspace');
+            this.setViewMode('terminal');
             this.renderSessionDetail();
           }
         }
@@ -5376,7 +5224,7 @@ class CWMApp {
           const session = (this.state.allSessions || []).find(s => s.id === sessionId);
           if (session) {
             this.state.selectedSession = session;
-            this.setViewMode('workspace');
+            this.setViewMode('terminal');
             this.renderSessionDetail();
           }
         }
@@ -6615,8 +6463,7 @@ class CWMApp {
      ═══════════════════════════════════════════════════════════ */
 
   setViewMode(mode) {
-    // Migrate legacy "all" mode to "workspace" for existing users
-    if (mode === 'all') mode = 'workspace';
+    if (mode === 'workspace' || mode === 'all') mode = 'terminal';
 
     this.state.viewMode = mode;
     localStorage.setItem('cwm_viewMode', mode);
@@ -6821,76 +6668,7 @@ class CWMApp {
     });
   }
 
-  initSidebarSectionResize() {
-    const handle = document.getElementById('sidebar-section-resize');
-    if (!handle) return;
-
-    const wsList = this.els.workspaceList;
-    const projList = this.els.projectsList;
-    if (!wsList || !projList) return;
-
-    let isResizing = false;
-    let startY = 0;
-    let startWsHeight = 0;
-
-    const onMove = (clientY) => {
-      if (!isResizing) return;
-      const dy = clientY - startY;
-      const sidebar = this.els.sidebar;
-      const sidebarRect = sidebar.getBoundingClientRect();
-      const totalAvailable = sidebarRect.height - 200; // Reserve space for headers/footer
-      const newWsHeight = Math.max(80, Math.min(totalAvailable, startWsHeight + dy));
-      wsList.style.flex = 'none';
-      wsList.style.height = newWsHeight + 'px';
-      projList.style.flex = '1';
-      projList.style.minHeight = '0';
-    };
-
-    const onEnd = () => {
-      if (!isResizing) return;
-      isResizing = false;
-      handle.classList.remove('active');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      // Save to localStorage
-      const height = parseInt(wsList.style.height, 10);
-      if (height) localStorage.setItem('cwm_wsSectionHeight', height.toString());
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', onTouchEnd);
-    };
-
-    const onMouseMove = (e) => onMove(e.clientY);
-    const onMouseUp = () => onEnd();
-    const onTouchMove = (e) => { e.preventDefault(); onMove(e.touches[0].clientY); };
-    const onTouchEnd = () => onEnd();
-
-    const startResize = (clientY) => {
-      isResizing = true;
-      startY = clientY;
-      startWsHeight = wsList.getBoundingClientRect().height;
-      handle.classList.add('active');
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('touchend', onTouchEnd);
-    };
-
-    handle.addEventListener('mousedown', (e) => { e.preventDefault(); startResize(e.clientY); });
-    handle.addEventListener('touchstart', (e) => { e.preventDefault(); startResize(e.touches[0].clientY); }, { passive: false });
-
-    // Restore saved height
-    const saved = localStorage.getItem('cwm_wsSectionHeight');
-    if (saved) {
-      wsList.style.flex = 'none';
-      wsList.style.height = saved + 'px';
-      projList.style.flex = '1';
-      projList.style.minHeight = '0';
-    }
-  }
+  initSidebarSectionResize() {}
 
 
   /* ═══════════════════════════════════════════════════════════
@@ -7160,7 +6938,7 @@ class CWMApp {
     this.closeQuickSwitcher();
 
     if (result.type === 'workspace') {
-      this.setViewMode('workspace');
+      this.setViewMode('terminal');
       this.selectWorkspace(result.item.id);
     } else if (result.type === 'session') {
       this.selectSession(result.item.id);
@@ -8092,261 +7870,7 @@ class CWMApp {
      RENDERING
      ═══════════════════════════════════════════════════════════ */
 
-  renderWorkspaces() {
-    const list = this.els.workspaceList;
-    const workspaces = this.state.workspaces;
-
-    if (workspaces.length === 0) {
-      list.innerHTML = `
-        <div style="padding: 24px 12px; text-align: center;">
-          <p style="font-size: 12px; color: var(--overlay0); margin-bottom: 8px;">No projects</p>
-          <button class="btn btn-ghost btn-sm" id="sidebar-create-ws">Create one</button>
-        </div>`;
-      const btn = document.getElementById('sidebar-create-ws');
-      if (btn) btn.addEventListener('click', () => this.createWorkspace());
-      this.els.workspaceCount.textContent = '0 projects';
-      return;
-    }
-
-    const colorMap = {
-      mauve: '#cba6f7', blue: '#89b4fa', green: '#a6e3a1', red: '#f38ba8',
-      peach: '#fab387', teal: '#94e2d5', pink: '#f5c2e7', yellow: '#f9e2af',
-      lavender: '#b4befe', sapphire: '#74c7ec', sky: '#89dceb', flamingo: '#f2cdcd',
-      rosewater: '#f5e0dc',
-    };
-
-    const renderWorkspaceItem = (ws) => {
-      const isActive = this.state.activeWorkspace && this.state.activeWorkspace.id === ws.id;
-      const color = colorMap[ws.color] || colorMap.mauve;
-      const allWsSessions = (this.state.allSessions || this.state.sessions).filter(s => s.workspaceId === ws.id);
-      const wsSessions = allWsSessions.filter(s => this.state.showHidden || !this.state.hiddenSessions.has(s.id));
-      const hiddenCount = allWsSessions.length - wsSessions.length;
-      const sessionCount = wsSessions.length;
-
-      // Group sessions by workingDir for nested display
-      const projectGroupState = JSON.parse(localStorage.getItem('cwm_projectGroupState') || '{}');
-      const sessionsByDir = {};
-      wsSessions.forEach(s => {
-        const dir = s.workingDir || '(no directory)';
-        if (!sessionsByDir[dir]) sessionsByDir[dir] = [];
-        sessionsByDir[dir].push(s);
-      });
-
-      // Build a lookup map for session sizes from projects data
-      const sessionSizeMap = {};
-      (this.state.projects || []).forEach(p => {
-        (p.sessions || []).forEach(ps => {
-          if (ps.size) sessionSizeMap[ps.name] = ps.size;
-        });
-      });
-
-      const renderSessionItem = (s) => {
-        const isHidden = this.state.hiddenSessions.has(s.id);
-        const name = s.name || '';
-
-        // Tri-state dot for worktree task sessions, simple dot for regular sessions
-        let statusDot, tristateAttr = '';
-        const wtTask = s.worktreeTask ? (this._worktreeTaskCache || []).find(t => t.sessionId === s.id) : null;
-        if (wtTask) {
-          // Check if terminal pane is actively producing output
-          const tp = this.terminalPanes.find(p => p && p.sessionId === s.id);
-          const isOutputActive = tp && (Date.now() - tp._lastOutputTime) < 3000;
-          if (s.status === 'running' && isOutputActive) {
-            statusDot = 'var(--green)'; tristateAttr = ' data-tristate="busy"';
-          } else if (s.status === 'running') {
-            statusDot = 'var(--peach)'; tristateAttr = ' data-tristate="waiting"';
-          } else if (wtTask.branchAhead > 0) {
-            statusDot = 'var(--blue)'; tristateAttr = ' data-tristate="ready"';
-          } else {
-            statusDot = 'var(--overlay0)'; tristateAttr = '';
-          }
-        } else {
-          const _wsActive = s.status === 'running' && s.lastOutputAt && (Date.now() - s.lastOutputAt) < 5000;
-          statusDot = s.status !== 'running' ? 'var(--overlay0)' : (_wsActive ? 'var(--green)' : 'var(--yellow)');
-          if (s.status === 'running') tristateAttr = _wsActive ? ' data-tristate="busy"' : ' data-tristate="waiting"';
-        }
-        const timeStr = s.lastActive ? this.relativeTime(s.lastActive) : '';
-        // Look up JSONL file size via resumeSessionId
-        const sizeBytes = s.resumeSessionId ? sessionSizeMap[s.resumeSessionId] : null;
-        const sizeStr = sizeBytes ? this.formatSize(sizeBytes) : '';
-
-        // Build inline badges for extra session metadata
-        let badges = '';
-        // Port badge - show first discovered port
-        if (s.ports && s.ports.length > 0) {
-          badges += `<span class="session-badge session-badge-port">:${s.ports[0]}</span>`;
-        }
-        // Bypass permissions warning badge
-        if (s.bypassPermissions) {
-          badges += `<span class="session-badge session-badge-warn">bypass</span>`;
-        }
-        // Non-default model badge (show short label)
-        if (s.model) {
-          const modelShort = s.model.includes('opus') ? 'opus'
-            : s.model.includes('sonnet') ? 'sonnet'
-            : s.model.includes('haiku') ? 'haiku'
-            : s.model.split('-').pop();
-          badges += `<span class="session-badge session-badge-model">${this.escapeHtml(modelShort)}</span>`;
-        }
-        // Cost badge (best-effort from cache)
-        const cachedCost = this._getSessionCostCached(s.id);
-        if (cachedCost !== null && cachedCost !== undefined) {
-          badges += `<span class="session-badge session-badge-cost">$${Number(cachedCost).toFixed(2)}</span>`;
-        }
-        // Subagent badge (from cached data)
-        const cachedSubagents = this._getSubagentsCached(s.id);
-        if (cachedSubagents !== null && cachedSubagents > 0) {
-          badges += `<span class="session-badge session-badge-agents">${cachedSubagents}</span>`;
-        }
-        // Tag badges (from session)
-        if (s.tags && s.tags.length > 0) {
-          for (const tag of s.tags.slice(0, 3)) {
-            const color = this._tagColor(tag);
-            badges += `<span class="session-badge session-badge-tag" style="background:color-mix(in srgb, var(--${color}) 15%, transparent);color:var(--${color});">${this.escapeHtml(tag)}</span>`;
-          }
-        }
-
-        // Pane color pip — show matching dot if session is open in a terminal slot
-        const slotIdx = this.getSlotForSession(s.id);
-        const pip = (slotIdx !== -1 && this.state.settings.paneColorHighlights)
-          ? `<span class="pane-color-pip" style="background:var(--${this.PANE_SLOT_COLORS[slotIdx]})"></span>`
-          : '';
-
-        // Build meta row (badges + size + time) — only if there's something to show
-        const metaParts = [badges, sizeStr ? `<span class="ws-session-size">${sizeStr}</span>` : '', timeStr ? `<span class="ws-session-time">${timeStr}</span>` : ''].filter(Boolean).join('');
-        const metaRow = metaParts ? `<div class="ws-session-meta-row">${metaParts}</div>` : '';
-
-        const nameHtml = name
-          ? `<span class="ws-session-name">${this.escapeHtml(name)}</span>`
-          : `<span class="ws-session-name session-name-empty">untitled</span>`;
-        return `<div class="ws-session-item${isHidden ? ' ws-session-hidden' : ''}" data-session-id="${s.id}" draggable="true" title="${this.escapeHtml(s.workingDir || '')}">
-          <span class="ws-session-dot${tristateAttr}" style="background: ${statusDot}"></span>${pip}
-          ${nameHtml}
-          ${metaRow}
-        </div>`;
-      };
-
-      const dirKeys = Object.keys(sessionsByDir);
-      let sessionItems;
-      if (dirKeys.length === 0) {
-        sessionItems = '';
-      } else if (dirKeys.length === 1 && dirKeys[0] === '(no directory)') {
-        // Only sessions without a directory - flat list
-        sessionItems = wsSessions.map(renderSessionItem).join('');
-      } else {
-        // Always show project directory headers (even for single directory)
-        // This enables right-click → new session on the directory
-        sessionItems = dirKeys.map(dir => {
-          const dirSessions = sessionsByDir[dir];
-          const groupKey = ws.id + ':' + dir;
-          // Default: expanded (true or missing). Explicitly false = collapsed.
-          const isExpanded = projectGroupState[groupKey] !== false;
-          // Show last 2 path segments for readability
-          const parts = dir.replace(/\\/g, '/').split('/');
-          const shortDir = parts.slice(-2).join('/');
-          return `<div class="ws-project-group" data-group-key="${this.escapeHtml(groupKey)}">
-            <div class="ws-project-group-header" draggable="true" data-dir="${this.escapeHtml(dir)}" data-ws-id="${ws.id}" title="${this.escapeHtml(dir)}">
-              <span class="ws-project-group-chevron${isExpanded ? ' open' : ''}">&#9654;</span>
-              <span class="ws-project-group-path">${this.escapeHtml(shortDir)}</span>
-              <span class="ws-project-group-count">${dirSessions.length}</span>
-            </div>
-            <div class="ws-project-group-body"${isExpanded ? '' : ' hidden'}>
-              ${dirSessions.map(renderSessionItem).join('')}
-            </div>
-          </div>`;
-        }).join('');
-      }
-
-      // Respect persisted collapse state: active workspace stays open unless user manually collapsed it
-      const isManuallyCollapsed = this._wsCollapseState && this._wsCollapseState[ws.id] === true;
-      const showBody = isActive && !isManuallyCollapsed;
-
-      return `
-        <div class="workspace-accordion" data-id="${ws.id}">
-          <div class="workspace-item${isActive ? ' active' : ''}" data-id="${ws.id}" draggable="true">
-            <span class="ws-chevron${showBody ? ' open' : ''}">&#9654;</span>
-            <div class="workspace-color-dot" style="background: ${color}"></div>
-            <div class="workspace-info">
-              <div class="workspace-name">${this.escapeHtml(ws.name)}</div>
-              <div class="workspace-session-count">${sessionCount} session${sessionCount !== 1 ? 's' : ''}</div>
-            </div>
-            <div class="workspace-actions">
-              ${this.state.settings.enableWorktreeTasks ? `<button class="btn btn-ghost btn-icon btn-sm ws-new-task-btn" data-ws-id="${ws.id}" title="New Task">+</button>` : ''}
-              <button class="btn btn-ghost btn-icon btn-sm ws-rename-btn" data-id="${ws.id}" title="Edit">
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                  <path d="M8.5 2.5l3 3M2 9.5V12h2.5L11 5.5l-3-3L2 9.5z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-              <button class="btn btn-ghost btn-icon btn-sm btn-danger-hover ws-delete-btn" data-id="${ws.id}" title="Delete">
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                  <path d="M2.5 4h9M5 4V2.5h4V4M3.5 4v7.5a1 1 0 001 1h5a1 1 0 001-1V4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="workspace-accordion-body"${showBody ? '' : ' hidden'}>
-            ${sessionItems || '<div class="ws-session-empty">No sessions</div>'}
-          </div>
-        </div>`;
-    };
-
-    // Split workspaces into grouped and ungrouped
-    const groups = this.state.groups || [];
-    const groupedIds = new Set();
-    groups.forEach(g => (g.workspaceIds || []).forEach(id => groupedIds.add(id)));
-    const ungrouped = workspaces.filter(ws => !groupedIds.has(ws.id));
-
-    let html = '';
-
-    // Render categories (groups) at the top
-    groups.forEach(group => {
-      const groupColor = colorMap[group.color] || colorMap.mauve;
-      const groupWorkspaces = (group.workspaceIds || [])
-        .map(id => workspaces.find(ws => ws.id === id))
-        .filter(Boolean);
-
-      // Show empty groups too so user can drag workspaces into them
-      const groupCount = groupWorkspaces.length;
-      const isCollapsed = this._groupCollapseState && this._groupCollapseState[group.id] === true;
-      const groupItemsHtml = groupCount > 0
-        ? groupWorkspaces.map(ws => renderWorkspaceItem(ws)).join('')
-        : '<div class="workspace-group-empty">Drag projects here</div>';
-
-      html += `
-        <div class="workspace-group" data-group-id="${group.id}">
-          <div class="workspace-group-header" data-group-id="${group.id}" style="--group-color: ${groupColor}">
-            <span class="group-chevron${isCollapsed ? '' : ' open'}">&#9662;</span>
-            <span class="group-color-dot" style="background: ${groupColor}"></span>
-            <span class="group-name">${this.escapeHtml(group.name)}</span>
-            <span class="group-count">${groupCount}</span>
-          </div>
-          <div class="workspace-group-items"${isCollapsed ? ' hidden' : ''}>
-            ${groupItemsHtml}
-          </div>
-        </div>`;
-    });
-
-    // Visual divider between categories and uncategorized projects
-    if (groups.length > 0 && ungrouped.length > 0) {
-      html += `<div class="sidebar-section-divider"><span class="sidebar-section-divider-label">Uncategorized</span></div>`;
-    }
-
-    // Render ungrouped projects
-    html += ungrouped.map(ws => renderWorkspaceItem(ws)).join('');
-
-    list.innerHTML = html;
-
-    // Fire off async cost fetches for visible sessions (best-effort, non-blocking)
-    const visibleSessionIds = (this.state.allSessions || this.state.sessions)
-      .filter(s => s.status === 'running' || s.status === 'idle')
-      .map(s => s.id);
-    if (visibleSessionIds.length > 0) {
-      this._fetchSessionCostsAsync(visibleSessionIds);
-    }
-
-
-    this.els.workspaceCount.textContent = `${workspaces.length} project${workspaces.length !== 1 ? 's' : ''}`;
-  }
+  renderWorkspaces() {}
 
   showWorkspaceContextMenu(workspaceId, x, y) {
     const ws = this.state.workspaces.find(w => w.id === workspaceId);
@@ -8446,56 +7970,11 @@ class CWMApp {
     this._renderContextItems(ws.name, items, x, y);
   }
 
-  async createGroup() {
-    const result = await this.showPromptModal({
-      title: 'New Category',
-      fields: [
-        { key: 'name', label: 'Category Name', placeholder: 'My Category', required: true },
-        { key: 'color', label: 'Color', type: 'color' },
-      ],
-      confirmText: 'Create',
-      confirmClass: 'btn-primary',
-    });
+  async createGroup() {}
 
-    if (!result) return;
+  async moveWorkspaceToGroup(workspaceId, groupId) {}
 
-    try {
-      await this.api('POST', '/api/groups', { name: result.name, color: result.color || 'mauve' });
-      this.showToast('Category created', 'success');
-      await this.loadGroups();
-      this.renderWorkspaces();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to create category', 'error');
-    }
-  }
-
-  async moveWorkspaceToGroup(workspaceId, groupId) {
-    try {
-      await this.api('POST', `/api/groups/${groupId}/add`, { workspaceId });
-      this.showToast('Project added to category', 'success');
-      await this.loadGroups();
-      this.renderWorkspaces();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to move project', 'error');
-    }
-  }
-
-  async removeWorkspaceFromGroup(workspaceId) {
-    // Find which group it's in and remove it
-    const groups = this.state.groups || [];
-    const group = groups.find(g => (g.workspaceIds || []).includes(workspaceId));
-    if (!group) return;
-
-    const newIds = (group.workspaceIds || []).filter(id => id !== workspaceId);
-    try {
-      await this.api('PUT', `/api/groups/${group.id}`, { workspaceIds: newIds });
-      this.showToast('Project removed from category', 'info');
-      await this.loadGroups();
-      this.renderWorkspaces();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to remove project', 'error');
-    }
-  }
+  async removeWorkspaceFromGroup(workspaceId) {}
 
   /**
    * Summarize a session and add the summary to its workspace docs.
@@ -8519,54 +7998,9 @@ class CWMApp {
     }
   }
 
-  async deleteGroup(groupId) {
-    const groups = this.state.groups || [];
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
+  async deleteGroup(groupId) {}
 
-    const confirmed = await this.showConfirmModal({
-      title: 'Delete Category',
-      message: `Delete "${group.name}"? Projects inside will become uncategorized.`,
-      confirmText: 'Delete',
-      confirmClass: 'btn-danger',
-    });
-    if (!confirmed) return;
-
-    try {
-      await this.api('DELETE', `/api/groups/${groupId}`);
-      this.showToast('Category deleted', 'info');
-      await this.loadGroups();
-      this.renderWorkspaces();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to delete category', 'error');
-    }
-  }
-
-  async renameGroup(groupId) {
-    const groups = this.state.groups || [];
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
-
-    const result = await this.showPromptModal({
-      title: 'Edit Category',
-      fields: [
-        { key: 'name', label: 'Category Name', value: group.name, required: true },
-        { key: 'color', label: 'Color', type: 'color', value: group.color },
-      ],
-      confirmText: 'Save',
-      confirmClass: 'btn-primary',
-    });
-    if (!result) return;
-
-    try {
-      await this.api('PUT', `/api/groups/${groupId}`, { name: result.name, color: result.color || group.color });
-      this.showToast('Category updated', 'success');
-      await this.loadGroups();
-      this.renderWorkspaces();
-    } catch (err) {
-      this.showToast(err.message || 'Failed to update category', 'error');
-    }
-  }
+  async renameGroup(groupId) {}
 
   showGroupContextMenu(groupId, x, y) {
     const groups = this.state.groups || [];
@@ -13269,7 +12703,7 @@ class CWMApp {
           const sid = row.dataset.sessionId;
           if (sid) {
             this.state.selectedSession = sid;
-            this.setViewMode('workspace');
+            this.setViewMode('terminal');
             this.selectSession(sid);
           }
         });
@@ -13341,7 +12775,7 @@ class CWMApp {
         const sid = row.dataset.sessionId;
         if (sid) {
           this.state.selectedSession = sid;
-          this.setViewMode('workspace');
+          this.setViewMode('terminal');
           this.selectSession(sid);
         }
       });
