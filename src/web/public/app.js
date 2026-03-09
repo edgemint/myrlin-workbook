@@ -9959,7 +9959,7 @@ class CWMApp {
     for (const group of this._tabGroups) {
       if (group.id === this._activeGroupId) continue;
       // Check persisted panes by managed sessionId, and cached live panes by claudeSessionId too
-      const foundInPanes = (group.panes || []).some(p => p && p.sessionId === sessionId);
+      const foundInPanes = (group.panes || []).some(p => p && (p.sessionId === sessionId || p.claudeSessionId === sessionId));
       const cached = this._groupPaneCache && this._groupPaneCache[group.id];
       const foundInCache = !foundInPanes && cached && (cached.panes || []).some(
         p => p && (p.sessionId === sessionId || p.claudeSessionId === sessionId)
@@ -9996,7 +9996,7 @@ class CWMApp {
    */
   _findPaneInGroup(group, sessionId) {
     // Check persisted layout panes first
-    const paneEntry = (group.panes || []).find(p => p && p.sessionId === sessionId);
+    const paneEntry = (group.panes || []).find(p => p && (p.sessionId === sessionId || p.claudeSessionId === sessionId));
     if (paneEntry) return paneEntry;
     // Check cached live TerminalPane objects for Claude UUID match
     const cached = this._groupPaneCache && this._groupPaneCache[group.id];
