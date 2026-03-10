@@ -10163,7 +10163,36 @@ class CWMApp {
   _showDebugPanel(lookingForId, foundLocation) {
     // Skip if debug panel is disabled in settings
     if (!this.getSetting('debugNavigationPanel')) {
-      console.log('[DEBUG] Debug navigation panel is OFF - skipping panel display');
+      // Log debug info to console instead
+      const mapEntries = Array.from(this._sessionLocationMap.entries());
+      console.log('%c🔍 Session Navigation Debug (Panel OFF - Logging to Console)', 'color: #00ff41; font-weight: bold; font-size: 14px; background: #1a1a2e; padding: 5px 10px;');
+      console.log(`%c🎯 LOOKING FOR: %c${lookingForId}`, 'color: #ffaa00', 'color: #ff4444; font-weight: bold');
+      console.log(`%c${foundLocation ? '✓ FOUND:' : '✗ NOT FOUND'} ${foundLocation ? `Group ${foundLocation.groupId}, Slot ${foundLocation.slotIdx}` : 'Not in map'}`, foundLocation ? 'color: #00ff41' : 'color: #ff4444');
+
+      console.log(`%c📍 Session Location Map (${mapEntries.length} entries):`, 'color: #ffaa00; font-weight: bold');
+      if (mapEntries.length === 0) {
+        console.log('%c⚠️ Map is empty!', 'color: #ff4444');
+      } else {
+        mapEntries.forEach(([id, loc]) => {
+          console.log(`  ${id.substring(0, 8)}... → Group: ${loc.groupId}, Slot: ${loc.slotIdx}`, id === lookingForId ? 'font-weight: bold; background: #ff444422' : '');
+        });
+      }
+
+      console.log('%c🏢 Tab Groups:', 'color: #ffaa00; font-weight: bold');
+      (this._tabGroups || []).forEach(g => {
+        const isActive = g.id === this._activeGroupId ? ' (ACTIVE)' : '';
+        console.log(`  ${g.name}${isActive} - ${g.panes?.length || 0} panes: ${(g.panes || []).map(p => `Slot ${p.slot}: ${p.sessionName || p.sessionId?.substring(0, 8) || '?'}`).join(' | ')}`);
+      });
+
+      console.log('%c🔌 Active Group Panes:', 'color: #0088ff; font-weight: bold');
+      this.terminalPanes.forEach((tp, i) => {
+        if (!tp) {
+          console.log(`  Slot ${i}: empty`);
+        } else {
+          console.log(`  Slot ${i}: ${tp.sessionName || tp.sessionId.substring(0, 8)} | Claude: ${tp.claudeSessionId ? tp.claudeSessionId.substring(0, 8) + '...' : 'NOT SET'}`);
+        }
+      });
+
       return;
     }
 
