@@ -131,6 +131,7 @@ class CWMApp {
         confirmBeforeClose: true,
         autoOpenTerminal: true,
         autoTrustDialogs: false,
+        debugNavigationPanel: false,
         maxConcurrentTasks: 4,
         defaultModelPlanning: '',
         defaultModelRunning: '',
@@ -3765,6 +3766,7 @@ class CWMApp {
       { key: 'confirmBeforeClose', label: 'Confirm Before Close', description: 'Ask for confirmation before closing terminal panes', category: 'Interface' },
       { key: 'uiScale', label: 'UI Scale', description: 'Adjust the overall interface size', category: 'Interface', type: 'scale' },
       { key: 'autoTrustDialogs', label: 'Auto-accept Trust Dialogs', description: 'Automatically accept safe trust/permission prompts in terminals. Dangerous prompts (delete, credentials) are never auto-accepted.', category: 'Automation' },
+      { key: 'debugNavigationPanel', label: 'Debug Navigation Panel', description: 'Show session location map when clicking "Go to session" (for debugging navigation issues)', category: 'Advanced' },
       { key: 'enableWorktreeTasks', label: 'Worktree Tasks', description: 'Enable automated worktree task creation and review workflow', category: 'Advanced' },
       { key: 'maxConcurrentTasks', label: 'Max Concurrent Tasks', description: 'Maximum number of worktree tasks that can run simultaneously (1-8)', category: 'Advanced', type: 'number', min: 1, max: 8 },
       { key: 'defaultModelPlanning', label: 'Default Model (Planning)', description: 'Auto-assign when tasks enter Planning. Haiku is fast/cheap for exploration. Only applies to tasks without a model set.', category: 'Advanced', type: 'select', options: [{ value: '', label: 'None' }, { value: 'claude-haiku-4-5-20251001', label: 'Haiku (fast, cheap)' }, { value: 'claude-sonnet-4-6', label: 'Sonnet (balanced)' }, { value: 'claude-opus-4-6', label: 'Opus (thorough)' }] },
@@ -10135,6 +10137,9 @@ class CWMApp {
    * Debug panel showing session location map and available panes.
    */
   _showDebugPanel(lookingForId, foundLocation) {
+    // Skip if debug panel is disabled in settings
+    if (!this.getSetting('debugNavigationPanel')) return;
+
     const mapEntries = Array.from(this._sessionLocationMap.entries());
 
     let html = `
