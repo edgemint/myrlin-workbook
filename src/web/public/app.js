@@ -7841,6 +7841,24 @@ class CWMApp {
           const toast = this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
             // Look up pane location in the session map (persists across tab switches)
             const paneLocation = this._sessionLocationMap.get(navId);
+
+            // DEBUG: Log the lookup attempt
+            console.log('[NAV] Go to session clicked for:', navId);
+            console.log('[NAV] Map lookup result:', paneLocation);
+            console.log('[NAV] Full session location map:', Array.from(this._sessionLocationMap.entries()));
+            console.log('[NAV] All tab groups:', this._tabGroups.map(g => ({
+              id: g.id,
+              name: g.name,
+              panes: (g.panes || []).map(p => ({slot: p.slot, sessionId: p.sessionId, name: p.sessionName}))
+            })));
+            console.log('[NAV] Active group panes:', this.terminalPanes.map((tp, i) => tp ? {slot: i, sessionId: tp.sessionId, claudeId: tp.claudeSessionId, name: tp.sessionName} : null).filter(Boolean));
+            console.log('[NAV] Cached groups:', Object.entries(this._groupPaneCache || {}).map(([gid, cached]) => ({
+              groupId: gid,
+              panes: (cached.panes || []).map((tp, i) => tp ? {slot: i, sessionId: tp.sessionId, claudeId: tp.claudeSessionId} : null).filter(Boolean)
+            })));
+
+            this._showDebugPanel(navId, paneLocation);
+
             if (paneLocation) {
               if (paneLocation.groupId === this._activeGroupId) {
                 // Same group — just focus the pane
@@ -10105,6 +10123,71 @@ class CWMApp {
       }
     }
     return null;
+  }
+
+  /**
+   * Debug panel showing session location map and available panes.
+   */
+  _showDebugPanel(lookingForId, foundLocation) {
+    const mapEntries = Array.from(this._sessionLocationMap.entries());
+
+    let html = `
+      <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000;
+                  background: #1a1a2e; border: 2px solid #00ff41; border-radius: 8px; padding: 20px;
+                  max-width: 800px; max-height: 80vh; overflow-y: auto; font-family: monospace; color: #00ff41;
+                  font-size: 12px; box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #00ff41; padding-bottom: 10px;">
+          <h2 style="margin: 0; color: #00ff41;">🔍 Session Navigation Debug</h2>
+          <button onclick="this.closest('[data-debug-panel]').remove()" style="background: #00ff41; color: #1a1a2e; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">✕</button>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <div style="color: #ffaa00; margin-bottom: 5px;">🎯 LOOKING FOR: <span style="color: #ff4444;">${lookingForId}</span></div>
+          <div style="color: ${foundLocation ? '#00ff41' : '#ff4444'}; margin-bottom: 10px;">
+            ${foundLocation ? `✓ FOUND: Group <strong>${foundLocation.groupId}</strong>, Slot <strong>${foundLocation.slotIdx}</strong>` : '✗ NOT FOUND IN MAP'}
+          </div>
+        </div>
+
+        <div style="background: #0f0f1e; padding: 10px; border-left: 3px solid #00ff41; margin-bottom: 15px;">
+          <div style="color: #ffaa00; margin-bottom: 8px;">📍 Session Location Map (${mapEntries.length} entries):</div>
+          <div>
+            ${mapEntries.length === 0 ? '<span style="color: #ff4444;">⚠️ Map is empty!</span>' : mapEntries.map(([id, loc]) => `
+              <div style="margin: 5px 0; ${id === lookingForId ? 'background: #ff444422; padding: 5px;' : ''}">
+                <span style="color: #ffff00;">${id.substring(0, 8)}...</span> → Group: <strong>${loc.groupId}</strong>, Slot: <strong>${loc.slotIdx}</strong>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="background: #0f0f1e; padding: 10px; border-left: 3px solid #00aa00; margin-bottom: 15px;">
+          <div style="color: #ffaa00; margin-bottom: 8px;">🏢 Tab Groups:</div>
+          ${(this._tabGroups || []).map(g => `
+            <div style="margin: 8px 0; padding: 5px; ${g.id === this._activeGroupId ? 'background: #00ff4133' : ''}">
+              <div><strong>${g.name}</strong> ${g.id === this._activeGroupId ? '(ACTIVE)' : ''} - ${g.panes?.length || 0} panes</div>
+              <div style="margin-left: 10px; color: #aaaaaa;">
+                ${(g.panes || []).map(p => `Slot ${p.slot}: ${p.sessionName || p.sessionId?.substring(0, 8) || '?'}`).join(' | ')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div style="background: #0f0f1e; padding: 10px; border-left: 3px solid #0088ff;">
+          <div style="color: #ffaa00; margin-bottom: 8px;">🔌 Active Group Panes:</div>
+          <div style="color: #aaaaaa;">
+            ${this.terminalPanes.map((tp, i) => {
+              if (!tp) return `<div>Slot ${i}: <span style="color: #666;">empty</span></div>`;
+              return `<div>Slot ${i}: <strong>${tp.sessionName || tp.sessionId.substring(0, 8)}</strong> | Claude: ${tp.claudeSessionId ? tp.claudeSessionId.substring(0, 8) + '...' : '<span style="color: #ff4444;">NOT SET</span>'}</div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+      <div onclick="this.remove()" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; background: rgba(0,0,0,0.5);"></div>
+    `;
+
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-debug-panel', 'true');
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper);
   }
 
   /**
