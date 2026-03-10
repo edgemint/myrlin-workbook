@@ -7788,22 +7788,16 @@ class CWMApp {
         const wsName = d.workspaceName ? ` (${d.workspaceName})` : '';
         const msg = d.message || 'needs attention';
 
-        // Prefer claudeSessionId for pane lookup — it's the actual Claude UUID
-        // stored on TerminalPane.claudeSessionId and always accurate. The managed
-        // d.sessionId can be wrong when _findSession resolves by CWD ambiguity
-        // (multiple sessions share the same workingDir).
-        const navSessionId = d.claudeSessionId || d.sessionId || null;
-
-        // Push to notification center (use navSessionId so clicks navigate correctly)
-        const notifId = this._pushNotification(`${name}${wsName}: ${msg}`, 'info', navSessionId);
+        // Push to notification center
+        const notifId = this._pushNotification(`${name}${wsName}: ${msg}`, 'info', d.sessionId || null);
 
         // In-app toast with action button to navigate to the session
-        if (navSessionId) {
+        if (d.sessionId) {
           const toast = this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
             // Find the terminal pane slot for this session (-1 triggers cross-group search)
             // Checks both managed sessionId and claudeSessionId to handle UUID mismatches
-            const slotIdx = this._findTerminalPaneIndex(navSessionId);
-            this._navigateToSession(navSessionId, slotIdx);
+            const slotIdx = this._findTerminalPaneIndex(d.sessionId);
+            this._navigateToSession(d.sessionId, slotIdx);
           });
           if (toast) toast.dataset.notifId = notifId;
         } else {
@@ -7812,7 +7806,7 @@ class CWMApp {
         }
 
         // Browser notification (if enabled and window not focused)
-        this._showBrowserNotification(`${name}${wsName}: ${msg}`, navSessionId);
+        this._showBrowserNotification(`${name}${wsName}: ${msg}`, d.sessionId || null);
 
         // Flash browser title
         if (typeof this._flashBrowserTitle === 'function') {
