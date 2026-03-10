@@ -9713,6 +9713,22 @@ class CWMApp {
   }
 
   /**
+   * Rebuild location map entries for all terminals in a specific group.
+   * Call this after operations that move terminals (swap, restore) to ensure
+   * the map reflects current positions even if UUIDs were detected after the move.
+   */
+  _refreshSessionLocationMapForGroup(groupId) {
+    const panes = groupId === this._activeGroupId ? this.terminalPanes : this._groupPaneCache[groupId]?.panes;
+    if (!panes) return;
+    for (let i = 0; i < panes.length; i++) {
+      const tp = panes[i];
+      if (tp && tp.claudeSessionId) {
+        this._sessionLocationMap.set(tp.claudeSessionId, {groupId, slotIdx: i});
+      }
+    }
+  }
+
+  /**
    * Stop an active voice recognition session for a given terminal pane slot.
    * Sets the userStopped flag so onend sends accumulated text instead of restarting.
    * Safe to call even if no recognition is active for the slot.
@@ -9754,6 +9770,9 @@ class CWMApp {
     if (dstTp && dstTp.claudeSessionId) {
       this._sessionLocationMap.set(dstTp.claudeSessionId, {groupId: this._activeGroupId, slotIdx: srcSlot});
     }
+    // Refresh the entire map for the active group to catch any UUIDs that were set
+    // after the swap (defensive: handles case where UUID detection completes after swap)
+    this._refreshSessionLocationMapForGroup(this._activeGroupId);
 
     // Update DOM for both panes
     [srcSlot, dstSlot].forEach(slot => {
