@@ -8604,7 +8604,8 @@ class CWMApp {
           sessions = sessions.filter(s => {
             const sName = (s.name || '').toLowerCase();
             const sTitle = (this.getProjectSessionTitle(s.name) || '').toLowerCase();
-            return sName.includes(query) || sTitle.includes(query);
+            const sSnippet = (s.snippet || '').toLowerCase();
+            return sName.includes(query) || sTitle.includes(query) || sSnippet.includes(query);
           });
         }
       }
@@ -8620,11 +8621,12 @@ class CWMApp {
         // Tooltip: show title + session ID so user sees both on hover
         const tooltip = storedTitle
           ? `${storedTitle}\n\nSession: ${sessName}`
-          : sessName;
+          : (s.snippet ? `${s.snippet}\n\nSession: ${sessName}` : sessName);
         const isOpen = activeIds.has(sessName);
+        const untitledLabel = s.snippet ? this.escapeHtml(s.snippet) : 'untitled';
         const sessionNameHtml = displayTitle
           ? `<span class="project-session-name${isAutoName ? ' session-name-auto' : ''}">${this.escapeHtml(displayTitle)}</span>`
-          : `<span class="project-session-name session-name-empty">untitled</span>`;
+          : `<span class="project-session-name session-name-empty">${untitledLabel}</span>`;
         return `<div class="project-session-item${isOpen ? ' project-session-open' : ''}" draggable="true" data-session-name="${this.escapeHtml(sessName)}" data-project-path="${this.escapeHtml(p.realPath || '')}" data-project-encoded="${this.escapeHtml(encoded)}" title="${this.escapeHtml(tooltip)}">
           ${isOpen ? '<span class="project-session-active-icon">&#10003;</span>' : ''}
           ${sessionNameHtml}
@@ -10160,7 +10162,10 @@ class CWMApp {
    */
   _showDebugPanel(lookingForId, foundLocation) {
     // Skip if debug panel is disabled in settings
-    if (!this.getSetting('debugNavigationPanel')) return;
+    if (!this.getSetting('debugNavigationPanel')) {
+      console.log('[DEBUG] Debug navigation panel is OFF - skipping panel display');
+      return;
+    }
 
     const mapEntries = Array.from(this._sessionLocationMap.entries());
 

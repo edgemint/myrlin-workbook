@@ -894,16 +894,40 @@ app.get('/api/discover', requireAuth, (req, res) => {
             const filePath = path.join(projectDir, f);
             const stat = fs.statSync(filePath);
             totalSize += stat.size;
-            // Peek the first 16 KB to check for a real conversation turn.
+            // Peek the first 16 KB to check for a real conversation turn and extract a preview snippet.
             let hasConversation = false;
+            let snippet = null;
             try {
               const peekSize = Math.min(16384, stat.size);
               const buf = Buffer.alloc(peekSize);
               const fd = fs.openSync(filePath, 'r');
               try { fs.readSync(fd, buf, 0, peekSize, 0); } finally { fs.closeSync(fd); }
-              hasConversation = buf.includes('"type":"user"') || buf.includes('"type": "user"');
+              const bufStr = buf.toString('utf-8');
+              hasConversation = bufStr.includes('"type":"user"') || bufStr.includes('"type": "user"');
+              // Extract first user message text as preview snippet
+              if (hasConversation) {
+                const lines = bufStr.split('\n').filter(l => l.trim());
+                for (const line of lines) {
+                  try {
+                    const entry = JSON.parse(line);
+                    const inner = entry.message || entry;
+                    const role = entry.type || inner.role;
+                    if (role !== 'user' && role !== 'human') continue;
+                    const c = inner.content;
+                    let text = '';
+                    if (typeof c === 'string') text = c;
+                    else if (Array.isArray(c)) text = c.filter(b => b.type === 'text' && b.text).map(b => b.text).join(' ');
+                    if (!text || text.length < 5) continue;
+                    if (text.startsWith('<') && text.includes('system-reminder')) continue;
+                    text = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (text.length > 60) text = text.substring(0, 60).replace(/\s+\S*$/, '') + '…';
+                    snippet = text;
+                    break;
+                  } catch (_) {}
+                }
+              }
             } catch (_) {}
-            return { name: f.replace('.jsonl', ''), modified: stat.mtime, size: stat.size, hasConversation };
+            return { name: f.replace('.jsonl', ''), modified: stat.mtime, size: stat.size, hasConversation, snippet };
           })
           .filter(s => s.hasConversation)
           .sort((a, b) => b.modified - a.modified);
@@ -931,7 +955,7 @@ app.get('/api/discover', requireAuth, (req, res) => {
         sessionCount: sessionFiles.length,
         totalSize,
         lastActive: sessionFiles.length > 0 ? sessionFiles[0].modified : null,
-        sessions: sessionFiles.map(s => ({ name: s.name, modified: s.modified, size: s.size })),
+        sessions: sessionFiles.map(s => ({ name: s.name, modified: s.modified, size: s.size, snippet: s.snippet || null })),
       });
     }
 
