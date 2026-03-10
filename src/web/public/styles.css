@@ -4460,6 +4460,7 @@ textarea.input {
 }
 .terminal-pane-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--text); }
 .terminal-pane-title.session-name-empty::before { content: 'untitled'; color: var(--overlay0); font-weight: 400; font-style: italic; }
+.terminal-pane-title.session-name-auto { color: var(--overlay0); font-weight: 400; font-style: italic; }
 .terminal-pane:not(.terminal-pane-empty) .terminal-pane-title {
   cursor: text;
 }

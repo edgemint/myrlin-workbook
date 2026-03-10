@@ -3527,9 +3527,10 @@ class CWMApp {
           const tp = this.terminalPanes[i];
           if (tp && tp.sessionId === sessionId) {
             tp.sessionName = data.title;
+            tp.sessionNameIsAuto = false;
             const paneEl = document.getElementById(`term-pane-${i}`);
             const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) { titleEl.textContent = data.title; titleEl.classList.remove('session-name-empty'); }
+            if (titleEl) { titleEl.textContent = data.title; titleEl.classList.remove('session-name-empty', 'session-name-auto'); }
           }
         }
       }
@@ -3557,9 +3558,10 @@ class CWMApp {
           const tp = this.terminalPanes[i];
           if (tp && tp.sessionId === claudeSessionId) {
             tp.sessionName = data.title;
+            tp.sessionNameIsAuto = false;
             const paneEl = document.getElementById(`term-pane-${i}`);
             const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) { titleEl.textContent = data.title; titleEl.classList.remove('session-name-empty'); }
+            if (titleEl) { titleEl.textContent = data.title; titleEl.classList.remove('session-name-empty', 'session-name-auto'); }
           }
         }
       }
@@ -3608,6 +3610,20 @@ class CWMApp {
    */
   getSessionNameSource(claudeSessionId) {
     return (this.state.sessionNameSources && this.state.sessionNameSources[claudeSessionId]) || null;
+  }
+
+  /**
+   * Look up the first-message snippet for a Claude session from discover data.
+   * @param {string} claudeSessionId
+   * @returns {string|null}
+   */
+  getSessionSnippet(claudeSessionId) {
+    for (const p of (this.state.projects || [])) {
+      for (const s of (p.sessions || [])) {
+        if (s.name === claudeSessionId && s.snippet) return s.snippet;
+      }
+    }
+    return null;
   }
 
   /**
@@ -9107,7 +9123,7 @@ class CWMApp {
      TERMINAL GRID VIEW
      ═══════════════════════════════════════════════════════════ */
 
-  openTerminalInPane(slotIdx, sessionId, sessionName, spawnOpts) {
+  openTerminalInPane(slotIdx, sessionId, sessionName, spawnOpts, sessionNameIsAuto = false) {
     console.log('[DnD] openTerminalInPane slot:', slotIdx, 'session:', sessionId, 'name:', sessionName);
     // If the target slot already has an active terminal, find the next empty slot
     if (this.terminalPanes[slotIdx]) {
@@ -9135,9 +9151,11 @@ class CWMApp {
       if (sessionName) {
         titleEl.textContent = sessionName;
         titleEl.classList.remove('session-name-empty');
+        titleEl.classList.toggle('session-name-auto', !!sessionNameIsAuto);
       } else {
         titleEl.textContent = '';
         titleEl.classList.add('session-name-empty');
+        titleEl.classList.remove('session-name-auto');
       }
     }
     const minimizeBtn2 = paneEl.querySelector('.terminal-pane-minimize');
@@ -9192,8 +9210,18 @@ class CWMApp {
         }
       }
       if (slotIdx === -1) return;
-      tp.sessionName = name || uuid;
       tp.claudeSessionId = uuid;
+
+      // Resolve display name: stored title > snippet from discover > empty (shows "untitled")
+      const storedTitle = this.getProjectSessionTitle(uuid);
+      const nameSource = this.getSessionNameSource(uuid);
+      const isManualName = storedTitle && nameSource === 'manual';
+      const snippet = storedTitle || this.getSessionSnippet(uuid) || name || '';
+      const isAutoName = snippet && !isManualName;
+
+      tp.sessionName = snippet || uuid;
+      tp.sessionNameIsAuto = isAutoName;
+
       // Track location in map for notification lookups
       this._sessionLocationMap.set(uuid, {groupId, slotIdx});
       // Update DOM title only if pane is in active group
@@ -9203,6 +9231,7 @@ class CWMApp {
         if (titleEl) {
           titleEl.textContent = tp.sessionName;
           titleEl.classList.remove('session-name-empty');
+          titleEl.classList.toggle('session-name-auto', !!isAutoName);
         }
       }
       // Refresh session lists
@@ -9791,7 +9820,10 @@ class CWMApp {
         // Occupied pane - move the terminal DOM
         paneEl.hidden = false;
         paneEl.classList.remove('terminal-pane-empty');
-        if (titleEl) titleEl.textContent = tp.sessionName || tp.sessionId;
+        if (titleEl) {
+          titleEl.textContent = tp.sessionName || tp.sessionId;
+          titleEl.classList.toggle('session-name-auto', !!tp.sessionNameIsAuto);
+        }
         if (closeBtn) closeBtn.hidden = false;
         if (uploadBtnEl) uploadBtnEl.hidden = false;
         if (micBtnEl && this._speechRecognitionAvailable) micBtnEl.hidden = false;
@@ -11444,9 +11476,10 @@ class CWMApp {
    */
   startTerminalPaneRename(nameEl, slotIdx, sessionId, isStoreSession) {
     const wasEmpty = nameEl.classList.contains('session-name-empty');
+    const wasAuto = nameEl.classList.contains('session-name-auto');
     const currentName = nameEl.textContent;
-    // Remove empty class so ::before "untitled" hint doesn't overlay the input
-    nameEl.classList.remove('session-name-empty');
+    // Remove empty/auto class so ::before "untitled" hint doesn't overlay the input
+    nameEl.classList.remove('session-name-empty', 'session-name-auto');
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'inline-rename-input';
@@ -11458,6 +11491,7 @@ class CWMApp {
 
     const restoreEmpty = () => {
       if (wasEmpty) nameEl.classList.add('session-name-empty');
+      if (wasAuto) nameEl.classList.add('session-name-auto');
     };
 
     let committed = false;
@@ -11484,9 +11518,10 @@ class CWMApp {
 
           // Update TerminalPane instance
           const tp = this.terminalPanes[slotIdx];
-          if (tp) tp.sessionName = newName;
+          if (tp) { tp.sessionName = newName; tp.sessionNameIsAuto = false; }
 
           nameEl.textContent = newName;
+          nameEl.classList.remove('session-name-auto');
           nameEl.classList.add('rename-flash');
           setTimeout(() => nameEl.classList.remove('rename-flash'), 600);
 
@@ -11583,7 +11618,7 @@ class CWMApp {
         if (p.sessionId) {
           const restoreOpts = Object.assign({}, p.spawnOpts || {});
           if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
-          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts);
+          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts, !!p.sessionNameIsAuto);
         }
       });
     }
@@ -11966,7 +12001,11 @@ class CWMApp {
             paneEl.hidden = false;
             paneEl.classList.remove('terminal-pane-empty');
             const titleEl = paneEl.querySelector('.terminal-pane-title');
-            if (titleEl) { titleEl.textContent = cached.panes[i].sessionName || cached.panes[i].sessionId; titleEl.classList.remove('session-name-empty'); }
+            if (titleEl) {
+              titleEl.textContent = cached.panes[i].sessionName || cached.panes[i].sessionId;
+              titleEl.classList.remove('session-name-empty');
+              titleEl.classList.toggle('session-name-auto', !!cached.panes[i].sessionNameIsAuto);
+            }
             const closeBtn = paneEl.querySelector('.terminal-pane-close');
             if (closeBtn) closeBtn.hidden = false;
             const uploadBtn = paneEl.querySelector('.terminal-pane-upload');
@@ -12002,7 +12041,7 @@ class CWMApp {
           if (p.sessionId) {
             const restoreOpts = Object.assign({}, p.spawnOpts || {});
             if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
-            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts);
+            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts, !!p.sessionNameIsAuto);
           }
         });
       }
@@ -12037,6 +12076,7 @@ class CWMApp {
           sessionId: this.terminalPanes[i].sessionId,
           claudeSessionId: this.terminalPanes[i].claudeSessionId || null,
           sessionName: this.terminalPanes[i].sessionName,
+          sessionNameIsAuto: this.terminalPanes[i].sessionNameIsAuto || false,
           spawnOpts: this.terminalPanes[i].spawnOpts || {},
         });
       }
