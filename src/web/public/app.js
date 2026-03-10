@@ -7682,8 +7682,24 @@ class CWMApp {
         this._markNotificationRead(id);
         const sid = el.dataset.sessionId;
         if (sid) {
-          const slotIdx = this._findTerminalPaneIndex(sid);
-          this._navigateToSession(sid, slotIdx);
+          // Try DOM-based lookup by data-claude-session-id first
+          const paneInfo = this._findPaneByClaudeSessionId(sid);
+          if (paneInfo) {
+            if (paneInfo.groupId !== this._activeGroupId) {
+              this._suppressFocusin = true;
+              this.switchTerminalGroup(paneInfo.groupId);
+              const freshSlot = this._findTerminalPaneIndex(sid);
+              this.setActiveTerminalPane(freshSlot !== -1 ? freshSlot : paneInfo.slot);
+              this._suppressFocusin = false;
+            } else {
+              this.setActiveTerminalPane(paneInfo.slot);
+            }
+            if (this.state.viewMode !== 'terminal') this.setViewMode('terminal');
+          } else {
+            // Fallback to old navigation
+            const slotIdx = this._findTerminalPaneIndex(sid);
+            this._navigateToSession(sid, slotIdx);
+          }
           this.closeNotificationCenter();
         }
       });
@@ -7777,6 +7793,33 @@ class CWMApp {
             session.hookState = data.data.hookState;
           }
         }
+        // Stamp claudeSessionId on the terminal pane DOM — hooks fire immediately
+        // (within ms of session start), well before the PTY's 8-second filesystem
+        // scan detects the UUID. This ensures data-claude-session-id is set before
+        // any notification arrives, making pane lookup by Claude UUID reliable.
+        if (data.data && data.data.claudeSessionId && data.data.sessionId) {
+          const cid = data.data.claudeSessionId;
+          const mid = data.data.sessionId;
+          // Search active group panes
+          for (let i = 0; i < this.terminalPanes.length; i++) {
+            const tp = this.terminalPanes[i];
+            if (tp && tp.sessionId === mid) {
+              tp.claudeSessionId = cid;
+              const paneEl = document.getElementById(`term-pane-${i}`);
+              if (paneEl) paneEl.setAttribute('data-claude-session-id', cid);
+              break;
+            }
+          }
+          // Search cached (non-active) group panes
+          for (const cached of Object.values(this._groupPaneCache || {})) {
+            for (let i = 0; i < (cached.panes || []).length; i++) {
+              if (cached.panes[i] && cached.panes[i].sessionId === mid) {
+                cached.panes[i].claudeSessionId = cid;
+                break;
+              }
+            }
+          }
+        }
         // Re-render session list to show new state badge
         this.loadSessions().then(() => { if (this._smOpen) this.renderSessionManager(); });
         break;
@@ -7788,16 +7831,41 @@ class CWMApp {
         const wsName = d.workspaceName ? ` (${d.workspaceName})` : '';
         const msg = d.message || 'needs attention';
 
+        // Use claudeSessionId for notification storage and navigation — it's the
+        // actual Claude UUID stamped on terminal pane DOM via data-claude-session-id,
+        // making pane lookup unambiguous. The managed d.sessionId can be wrong when
+        // _findSession resolves by CWD and multiple sessions share the same directory.
+        const navId = d.claudeSessionId || d.sessionId || null;
+
         // Push to notification center
-        const notifId = this._pushNotification(`${name}${wsName}: ${msg}`, 'info', d.sessionId || null);
+        const notifId = this._pushNotification(`${name}${wsName}: ${msg}`, 'info', navId);
 
         // In-app toast with action button to navigate to the session
-        if (d.sessionId) {
+        if (navId) {
           const toast = this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
-            // Find the terminal pane slot for this session (-1 triggers cross-group search)
-            // Checks both managed sessionId and claudeSessionId to handle UUID mismatches
-            const slotIdx = this._findTerminalPaneIndex(d.sessionId);
-            this._navigateToSession(d.sessionId, slotIdx);
+            // Use DOM-based lookup: finds pane by data-claude-session-id attribute
+            const paneInfo = this._findPaneByClaudeSessionId(navId);
+            if (paneInfo) {
+              if (paneInfo.groupId === this._activeGroupId) {
+                // Same group — just focus the pane
+                this.setActiveTerminalPane(paneInfo.slot);
+              } else {
+                // Cross-group — switch and focus
+                this._suppressFocusin = true;
+                this.switchTerminalGroup(paneInfo.groupId);
+                const freshSlot = this._findTerminalPaneIndex(navId);
+                this.setActiveTerminalPane(freshSlot !== -1 ? freshSlot : paneInfo.slot);
+                this._suppressFocusin = false;
+                requestAnimationFrame(() => { requestAnimationFrame(() => {
+                  const slot = this._findTerminalPaneIndex(navId);
+                  if (slot !== -1) this.setActiveTerminalPane(slot);
+                }); });
+              }
+            } else {
+              // Fallback: use old dual-ID navigation
+              const slotIdx = this._findTerminalPaneIndex(navId);
+              this._navigateToSession(navId, slotIdx);
+            }
           });
           if (toast) toast.dataset.notifId = notifId;
         } else {
@@ -7806,7 +7874,7 @@ class CWMApp {
         }
 
         // Browser notification (if enabled and window not focused)
-        this._showBrowserNotification(`${name}${wsName}: ${msg}`, d.sessionId || null);
+        this._showBrowserNotification(`${name}${wsName}: ${msg}`, navId);
 
         // Flash browser title
         if (typeof this._flashBrowserTitle === 'function') {
@@ -9050,6 +9118,8 @@ class CWMApp {
 
     // Ensure pane is visible before mounting terminal
     paneEl.hidden = false;
+    // Clear stale Claude session UUID from previous occupant
+    paneEl.removeAttribute('data-claude-session-id');
 
     // Update pane state
     paneEl.classList.remove('terminal-pane-empty');
@@ -9100,8 +9170,9 @@ class CWMApp {
       if (slotIdx === -1) return;
       tp.sessionName = name || uuid;
       tp.claudeSessionId = uuid;
-      // Update pane title bar
+      // Stamp the Claude session UUID on the DOM for unambiguous pane lookup
       const paneEl = document.getElementById(`term-pane-${slotIdx}`);
+      if (paneEl) paneEl.setAttribute('data-claude-session-id', uuid);
       const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
       if (titleEl) {
         titleEl.textContent = tp.sessionName;
@@ -9398,6 +9469,7 @@ class CWMApp {
     // Reset to empty state
     paneEl.classList.remove('terminal-pane-active');
     paneEl.classList.add('terminal-pane-empty');
+    paneEl.removeAttribute('data-claude-session-id');
     const titleEl = paneEl.querySelector('.terminal-pane-title');
     if (titleEl) titleEl.textContent = 'Drop a session here';
     const minimizeBtn3 = paneEl.querySelector('.terminal-pane-minimize');
@@ -9974,6 +10046,39 @@ class CWMApp {
         break;
       }
     }
+  }
+
+  /**
+   * Find a terminal pane by its Claude session UUID across ALL groups.
+   * Uses the DOM data-claude-session-id attribute for the active group
+   * and searches cached TerminalPane objects for non-active groups.
+   * Returns { slot, groupId } or null.
+   */
+  _findPaneByClaudeSessionId(claudeSessionId) {
+    if (!claudeSessionId) return null;
+    // Active group: query DOM directly (fast, unambiguous)
+    const el = document.querySelector(`.terminal-pane[data-claude-session-id="${CSS.escape(claudeSessionId)}"]`);
+    if (el) {
+      const slot = parseInt(el.dataset.slot, 10);
+      if (this.terminalPanes[slot]) return { slot, groupId: this._activeGroupId };
+    }
+    // Cached (non-active) groups: search TerminalPane objects in memory
+    for (const [groupId, cached] of Object.entries(this._groupPaneCache || {})) {
+      for (let i = 0; i < (cached.panes || []).length; i++) {
+        if (cached.panes[i] && cached.panes[i].claudeSessionId === claudeSessionId) {
+          return { slot: i, groupId };
+        }
+      }
+    }
+    // Also check persisted group.panes (for sessions that haven't been cached yet)
+    if (this._tabGroups) {
+      for (const group of this._tabGroups) {
+        if (group.id === this._activeGroupId) continue;
+        const pane = (group.panes || []).find(p => p && p.claudeSessionId === claudeSessionId);
+        if (pane) return { slot: pane.slot, groupId: group.id };
+      }
+    }
+    return null;
   }
 
   /**
@@ -11689,6 +11794,7 @@ class CWMApp {
         const paneEl = document.getElementById(`term-pane-${i}`);
         if (paneEl) {
           paneEl.classList.add('terminal-pane-empty');
+          paneEl.removeAttribute('data-claude-session-id');
           const header = paneEl.querySelector('.terminal-pane-title');
           if (header) header.textContent = 'Drop a session here';
           const closeBtn = paneEl.querySelector('.terminal-pane-close');
@@ -11714,6 +11820,10 @@ class CWMApp {
             // Explicitly unhide -- belt-and-suspenders with updateTerminalGridLayout()
             paneEl.hidden = false;
             paneEl.classList.remove('terminal-pane-empty');
+            // Restore Claude session UUID on the DOM for pane lookup
+            if (cached.panes[i].claudeSessionId) {
+              paneEl.setAttribute('data-claude-session-id', cached.panes[i].claudeSessionId);
+            }
             const titleEl = paneEl.querySelector('.terminal-pane-title');
             if (titleEl) { titleEl.textContent = cached.panes[i].sessionName || cached.panes[i].sessionId; titleEl.classList.remove('session-name-empty'); }
             const closeBtn = paneEl.querySelector('.terminal-pane-close');
