@@ -9150,6 +9150,12 @@ class CWMApp {
     const tp = new TerminalPane(containerId, sessionId, sessionName, spawnOpts);
     this.terminalPanes[slotIdx] = tp;
 
+    // If this pane already has a Claude UUID (e.g., from restore or move),
+    // update location map immediately. Critical for sessions moved between groups.
+    if (tp.claudeSessionId) {
+      this._sessionLocationMap.set(tp.claudeSessionId, {groupId: this._activeGroupId, slotIdx});
+    }
+
     // Wire up mobile mode change callback to sync keyboard toggle button
     tp.onMobileModeChange = (mode) => {
       document.querySelectorAll('.toolbar-keyboard').forEach(kb => {
@@ -11888,6 +11894,11 @@ class CWMApp {
       for (let i = 0; i < CWMApp.MAX_PANES; i++) {
         if (cached.panes[i]) {
           this.terminalPanes[i] = cached.panes[i];
+          // Update location map: this pane is now in the newly active group
+          const tp = cached.panes[i];
+          if (tp.claudeSessionId) {
+            this._sessionLocationMap.set(tp.claudeSessionId, {groupId, slotIdx: i});
+          }
           const paneEl = document.getElementById(`term-pane-${i}`);
           if (paneEl) {
             // Explicitly unhide -- belt-and-suspenders with updateTerminalGridLayout()
