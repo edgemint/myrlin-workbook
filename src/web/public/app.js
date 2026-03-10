@@ -9166,17 +9166,29 @@ class CWMApp {
     tp.onTitleChange = null;
 
     tp.onUuidDetected = (uuid, name) => {
-      const slotIdx = this.terminalPanes.indexOf(tp);
+      let slotIdx = this.terminalPanes.indexOf(tp);
+      let inActiveGroup = true;
+      // If not in active group, search cached groups
+      if (slotIdx === -1) {
+        inActiveGroup = false;
+        for (const cached of Object.values(this._groupPaneCache || {})) {
+          slotIdx = (cached.panes || []).indexOf(tp);
+          if (slotIdx !== -1) break;
+        }
+      }
       if (slotIdx === -1) return;
       tp.sessionName = name || uuid;
       tp.claudeSessionId = uuid;
       // Stamp the Claude session UUID on the DOM for unambiguous pane lookup
-      const paneEl = document.getElementById(`term-pane-${slotIdx}`);
-      if (paneEl) paneEl.setAttribute('data-claude-session-id', uuid);
-      const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
-      if (titleEl) {
-        titleEl.textContent = tp.sessionName;
-        titleEl.classList.remove('session-name-empty');
+      // Only if pane is in active group (DOM is rendered)
+      if (inActiveGroup) {
+        const paneEl = document.getElementById(`term-pane-${slotIdx}`);
+        if (paneEl) paneEl.setAttribute('data-claude-session-id', uuid);
+        const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
+        if (titleEl) {
+          titleEl.textContent = tp.sessionName;
+          titleEl.classList.remove('session-name-empty');
+        }
       }
       // Refresh session lists
       this.renderProjects();
