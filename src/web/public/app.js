@@ -9968,7 +9968,10 @@ class CWMApp {
     // OS-level browser notification: fire whenever the window is not focused,
     // regardless of which pane is active. If the user has the app in the background,
     // they always want to know — even for the "active" terminal slot.
-    this._showBrowserNotification(`${qualifiedName} is ready for input`, sessionId, sessionIdx);
+    // Still respect the completionNotifications master toggle.
+    if (this.getSetting('completionNotifications')) {
+      this._showBrowserNotification(`${qualifiedName} is ready for input`, sessionId, sessionIdx);
+    }
   }
 
   /**
