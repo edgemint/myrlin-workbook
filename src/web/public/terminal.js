@@ -491,7 +491,11 @@ class TerminalPane {
     }
     // Append optional spawn options as query params
     if (this.spawnOpts.cwd) wsUrl += '&cwd=' + encodeURIComponent(this.spawnOpts.cwd);
-    if (this.spawnOpts.resumeSessionId) wsUrl += '&resumeSessionId=' + encodeURIComponent(this.spawnOpts.resumeSessionId);
+    // Prefer claudeUUID, fall back to resumeSessionId — send as resumeSessionId query param
+    const uuidParam = this.spawnOpts.claudeUUID || this.spawnOpts.resumeSessionId;
+    if (uuidParam) {
+      wsUrl += '&resumeSessionId=' + encodeURIComponent(uuidParam);
+    }
     if (this.spawnOpts.command) wsUrl += '&command=' + encodeURIComponent(this.spawnOpts.command);
     if (this.spawnOpts.bypassPermissions) wsUrl += '&bypassPermissions=true';
     if (this.spawnOpts.verbose) wsUrl += '&verbose=true';
