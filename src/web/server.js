@@ -583,46 +583,56 @@ app.post('/api/groups/:id/add', requireAuth, (req, res) => {
  *   count=N           Number of recent sessions to return (default 10)
  */
 app.get('/api/sessions', requireAuth, (req, res) => {
-  const store = getStore();
-  const mode = req.query.mode || 'all';
+  try {
+    const store = getStore();
+    const mode = req.query.mode || 'all';
 
-  let sessions;
+    let sessions;
 
-  switch (mode) {
-    case 'workspace': {
-      const { workspaceId } = req.query;
-      if (!workspaceId) {
-        return res.status(400).json({ error: 'workspaceId query parameter is required when mode=workspace.' });
+    switch (mode) {
+      case 'workspace': {
+        const { workspaceId } = req.query;
+        if (!workspaceId) {
+          return res.status(400).json({ error: 'workspaceId query parameter is required when mode=workspace.' });
+        }
+        sessions = store.getWorkspaceSessions(workspaceId);
+        break;
       }
-      sessions = store.getWorkspaceSessions(workspaceId);
-      break;
+
+      case 'recent': {
+        const count = parseInt(req.query.count, 10) || 10;
+        sessions = store.getRecentSessions(count);
+        break;
+      }
+
+      case 'all':
+      default:
+        sessions = store.getAllSessionsList();
+        break;
     }
 
-    case 'recent': {
-      const count = parseInt(req.query.count, 10) || 10;
-      sessions = store.getRecentSessions(count);
-      break;
+    console.log(`[API /api/sessions] mode=${mode}, sessions=${sessions ? sessions.length : 'null/undefined'}`);
+
+    // Augment with live PTY activity data (lastOutputAt) if PTY manager is available
+    if (_ptyManager) {
+      const ptyMap = {};
+      for (const p of _ptyManager.listSessions()) {
+        ptyMap[p.sessionId] = p.lastOutputAt;
+      }
+      sessions = sessions.map(s => {
+        const lo = ptyMap[s.id];
+        return lo ? { ...s, lastOutputAt: lo } : s;
+      });
     }
 
-    case 'all':
-    default:
-      sessions = store.getAllSessionsList();
-      break;
+    console.log(`[API /api/sessions] returning ${sessions ? sessions.length : 0} sessions`);
+    const payload = { sessions };
+    return res.json(payload);
+  } catch (err) {
+    console.error('[API /api/sessions] ERROR:', err.message);
+    console.error(err.stack);
+    return res.status(500).json({ error: err.message });
   }
-
-  // Augment with live PTY activity data (lastOutputAt) if PTY manager is available
-  if (_ptyManager) {
-    const ptyMap = {};
-    for (const p of _ptyManager.listSessions()) {
-      ptyMap[p.sessionId] = p.lastOutputAt;
-    }
-    sessions = sessions.map(s => {
-      const lo = ptyMap[s.id];
-      return lo ? { ...s, lastOutputAt: lo } : s;
-    });
-  }
-
-  return res.json({ sessions });
 });
 
 /**
