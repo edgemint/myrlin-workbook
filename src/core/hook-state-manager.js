@@ -17,13 +17,11 @@
 
 const { getStore } = require('../state/store');
 
-// Hook event slugs that indicate Claude is actively working
+// Hook event slugs that indicate Claude is actively working (thinking/executing)
 const ACTIVE_EVENTS = new Set([
-  'session-start',
   'pre-tool-use',
   'post-tool-use',
   'user-prompt-submit',
-  'instructions-loaded',
   'subagent-start',
   'pre-compact',
 ]);
