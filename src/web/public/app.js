@@ -7691,14 +7691,19 @@ class CWMApp {
             }
             if (this.state.viewMode !== 'terminal') this.setViewMode('terminal');
           }
-          this.closeNotificationCenter();
         }
+        this.closeNotificationCenter();
       });
     });
 
     // Handler for all notifications: mark as read when clicking the item
     list.querySelectorAll('.notif-item').forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
+        // Don't mark as read if this click came from the "Go to session" button
+        // (button handler already marks it as read)
+        if (e.target.closest('.notif-go-to-btn')) {
+          return;
+        }
         const id = parseInt(el.dataset.notifId, 10);
         this._markNotificationRead(id);
       });
