@@ -8317,16 +8317,12 @@ html {
   gap: 10px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--surface0);
-  cursor: default;
+  cursor: pointer;
   transition: background 0.1s;
 }
 
 .notif-item:hover {
   background: var(--surface0);
-}
-
-.notif-item.notif-clickable {
-  cursor: pointer;
 }
 
 .notif-item.notif-unread {
@@ -8376,6 +8372,32 @@ html {
 
 .notif-item:not(.notif-unread) .notif-item-dot {
   visibility: hidden;
+}
+
+.notif-go-to-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  background: var(--blue);
+  color: var(--base);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s;
+  flex-shrink: 0;
+}
+
+.notif-go-to-btn:hover {
+  background: color-mix(in srgb, var(--blue) 120%, transparent);
+}
+
+.notif-go-to-btn:active {
+  opacity: 0.8;
+}
+
+.notif-go-to-btn:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 .notif-empty {
