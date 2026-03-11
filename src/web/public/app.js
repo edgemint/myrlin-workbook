@@ -7657,11 +7657,16 @@ class CWMApp {
     }).join('');
 
     // Click handlers
-    list.querySelectorAll('.notif-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = parseInt(el.dataset.notifId, 10);
+    // Handler for notifications with sessionId: navigate to session
+    list.querySelectorAll('.notif-go-to-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const notifEl = btn.closest('.notif-item');
+        const id = parseInt(notifEl.dataset.notifId, 10);
+        const sid = notifEl.dataset.sessionId;
+
         this._markNotificationRead(id);
-        const sid = el.dataset.sessionId;
+
         if (sid) {
           const paneLocation = this._findPaneBySessionId(sid);
           if (paneLocation) {
@@ -7677,6 +7682,14 @@ class CWMApp {
           }
           this.closeNotificationCenter();
         }
+      });
+    });
+
+    // Handler for all notifications: mark as read when clicking the item
+    list.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = parseInt(el.dataset.notifId, 10);
+        this._markNotificationRead(id);
       });
     });
   }
