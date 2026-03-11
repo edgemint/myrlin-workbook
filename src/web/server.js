@@ -627,10 +627,10 @@ app.get('/api/sessions', requireAuth, (req, res) => {
 
 /**
  * POST /api/sessions
- * Body: { name, workspaceId, workingDir?, topic?, command?, resumeSessionId? }
+ * Body: { name, workspaceId, workingDir?, topic?, command?, resumeSessionId?, displayName?, nameSource?, claudeUUID? }
  */
 app.post('/api/sessions', requireAuth, (req, res) => {
-  const { name, workspaceId, workingDir, topic, command, resumeSessionId } = req.body || {};
+  const { name, workspaceId, workingDir, topic, command, resumeSessionId, displayName, nameSource, claudeUUID } = req.body || {};
 
   if (name && name.trim().length > 200) {
     return res.status(400).json({ error: 'Session name must be 200 characters or fewer.' });
@@ -652,6 +652,10 @@ app.post('/api/sessions', requireAuth, (req, res) => {
   if (resumeSessionId && !safeResumeId) {
     return res.status(400).json({ error: 'Invalid resume session ID.' });
   }
+  const safeClaudeUUID = claudeUUID ? sanitizeSessionId(claudeUUID) : null;
+  if (claudeUUID && !safeClaudeUUID) {
+    return res.status(400).json({ error: 'Invalid claudeUUID.' });
+  }
 
   const store = getStore();
   const session = store.createSession({
@@ -661,6 +665,9 @@ app.post('/api/sessions', requireAuth, (req, res) => {
     topic: topic || '',
     command: safeCommand,
     resumeSessionId: safeResumeId,
+    ...(safeClaudeUUID && { claudeUUID: safeClaudeUUID }),
+    ...(displayName && { displayName: String(displayName).trim().substring(0, 200) }),
+    ...(nameSource && (nameSource === 'manual' || nameSource === 'auto') && { nameSource }),
   });
 
   if (!session) {
@@ -699,6 +706,19 @@ app.put('/api/sessions/:id', requireAuth, (req, res) => {
     if (!safe && updates.resumeSessionId) return res.status(400).json({ error: 'Invalid resume session ID.' });
     updates.resumeSessionId = safe || null;
   }
+  if (updates.claudeUUID !== undefined) {
+    const safe = sanitizeSessionId(updates.claudeUUID);
+    if (!safe && updates.claudeUUID) return res.status(400).json({ error: 'Invalid claudeUUID.' });
+    updates.claudeUUID = safe || null;
+  }
+  if (updates.displayName !== undefined) {
+    updates.displayName = updates.displayName ? String(updates.displayName).trim().substring(0, 200) : '';
+  }
+  if (updates.nameSource !== undefined) {
+    if (updates.nameSource !== 'manual' && updates.nameSource !== 'auto') {
+      return res.status(400).json({ error: "nameSource must be 'manual' or 'auto'." });
+    }
+  }
   if (updates.tags !== undefined) {
     updates.tags = Array.isArray(updates.tags) ? updates.tags.filter(t => typeof t === 'string' && t.length <= 30).slice(0, 10) : [];
   }
@@ -733,11 +753,11 @@ app.put('/api/sessions/:id', requireAuth, (req, res) => {
       // Generate summary in background so we don't block the response
       setImmediate(() => {
         try {
-          const resumeSessionId = session.resumeSessionId || req.params.id;
+          const resumeSessionId = session.claudeUUID || session.resumeSessionId || req.params.id;
           const jsonlPath = findJsonlFile(resumeSessionId);
           if (jsonlPath) {
             const summaryText = generateSessionSummary(jsonlPath);
-            const fullSummary = `**${session.name}**: ${summaryText}`;
+            const fullSummary = `**${session.displayName || session.name || session.id}**: ${summaryText}`;
             if (session.workspaceId) {
               store.addWorkspaceNote(session.workspaceId, fullSummary);
               // Broadcast update to SSE clients so the UI refreshes docs
@@ -1243,7 +1263,7 @@ app.post('/api/sessions/:id/auto-title', requireAuth, (req, res) => {
   const session = store.getSession(req.params.id);
 
   // Support both store sessions and project sessions (direct Claude UUID)
-  const claudeSessionId = (session && session.resumeSessionId) || req.body.claudeSessionId || req.params.id;
+  const claudeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || req.body.claudeSessionId || req.params.id;
   if (!claudeSessionId) {
     return res.status(400).json({ error: 'No Claude session ID available' });
   }
@@ -1385,9 +1405,9 @@ app.post('/api/sessions/:id/auto-title', requireAuth, (req, res) => {
  */
 app.post('/api/sessions/:id/summarize', requireAuth, (req, res) => {
   const store = getStore();
-  // For store sessions, use resumeSessionId. For project sessions, accept direct ID.
+  // For store sessions, use claudeUUID (preferred) or resumeSessionId. For project sessions, accept direct ID.
   const session = store.getSession(req.params.id);
-  const claudeSessionId = (session && session.resumeSessionId) || req.body.claudeSessionId || req.params.id;
+  const claudeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || req.body.claudeSessionId || req.params.id;
 
   if (!claudeSessionId) {
     return res.status(400).json({ error: 'No Claude session ID available' });
@@ -1475,7 +1495,7 @@ app.post('/api/sessions/:id/summarize', requireAuth, (req, res) => {
     // Build summary
     let overallTheme = 'Unable to determine theme';
     let recentTasking = 'No recent activity found';
-    const sessionName = session ? session.name : claudeSessionId;
+    const sessionName = session ? (session.displayName || session.name || session.id) : claudeSessionId;
 
     // Overall theme from first user message
     const firstUser = earlyMessages.find(m => m.role === 'user');
@@ -1966,24 +1986,24 @@ app.get('/api/sessions/:id/cost', requireAuth, (req, res) => {
   const store = getStore();
   const session = store.getSession(req.params.id);
 
-  let resumeSessionId = (session && session.resumeSessionId) || null;
+  let resumeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || null;
   let jsonlPath = resumeSessionId ? findJsonlFile(resumeSessionId) : null;
 
-  // Fallback: if no JSONL found by resumeSessionId, try matching by workingDir.
-  // This handles discovered/imported sessions that don't have resumeSessionId set.
+  // Fallback: if no JSONL found by claudeUUID/resumeSessionId, try matching by workingDir.
+  // This handles discovered/imported sessions that don't have claudeUUID/resumeSessionId set.
   if (!jsonlPath && session && session.workingDir) {
     const fallback = findJsonlByWorkingDir(session.workingDir);
     if (fallback) {
       jsonlPath = fallback.jsonlPath;
       // Backfill the resumeSessionId so future lookups are fast
-      if (!session.resumeSessionId) {
+      if (!session.claudeUUID && !session.resumeSessionId) {
         store.updateSession(req.params.id, { resumeSessionId: fallback.claudeSessionId });
         resumeSessionId = fallback.claudeSessionId;
       }
     }
   }
 
-  // Last resort: try the tomnar's workbook session ID directly (unlikely to match, but try)
+  // Last resort: try the workbook session ID directly (unlikely to match, but try)
   if (!jsonlPath && !resumeSessionId) {
     jsonlPath = findJsonlFile(req.params.id);
     resumeSessionId = req.params.id;
@@ -2044,7 +2064,7 @@ app.get('/api/quota-overview', requireAuth, (req, res) => {
     for (const workspace of allWorkspaces) {
       const sessions = store.getWorkspaceSessions(workspace.id);
       for (const session of sessions) {
-        const resumeSessionId = session.resumeSessionId;
+        const resumeSessionId = session.claudeUUID || session.resumeSessionId;
         if (!resumeSessionId) continue;
 
         const jsonlPath = findJsonlFile(resumeSessionId);
@@ -2079,7 +2099,7 @@ app.get('/api/quota-overview', requireAuth, (req, res) => {
 
           sessionQuotas.push({
             sessionId: session.id,
-            sessionName: session.name || session.id.substring(0, 12),
+            sessionName: session.displayName || session.name || session.id.substring(0, 12),
             workspaceId: workspace.id,
             workspaceName: workspace.name,
             latestInputTokens: latestInput,
@@ -2148,7 +2168,7 @@ app.get('/api/workspaces/:id/cost', requireAuth, (req, res) => {
   };
 
   for (const session of sessions) {
-    const resumeSessionId = session.resumeSessionId;
+    const resumeSessionId = session.claudeUUID || session.resumeSessionId;
     if (!resumeSessionId) continue;
 
     const jsonlPath = findJsonlFile(resumeSessionId);
@@ -2261,7 +2281,7 @@ app.get('/api/workspaces/:id/analytics', requireAuth, (req, res) => {
     const sessionCosts = [];
 
     for (const s of sessions.slice(0, 20)) {
-      const resumeSessionId = s.resumeSessionId;
+      const resumeSessionId = s.claudeUUID || s.resumeSessionId;
       if (!resumeSessionId) continue;
 
       const jsonlPath = findJsonlFile(resumeSessionId);
@@ -2288,7 +2308,7 @@ app.get('/api/workspaces/:id/analytics', requireAuth, (req, res) => {
         totalCost += sessionTotal;
         totalInputTokens += costData.tokens ? costData.tokens.input : 0;
         totalOutputTokens += costData.tokens ? costData.tokens.output : 0;
-        sessionCosts.push({ name: s.name || s.id.substring(0, 12), cost: sessionTotal });
+        sessionCosts.push({ name: s.displayName || s.name || s.id.substring(0, 12), cost: sessionTotal });
         costAvailable = true;
       } catch (_) {
         // Skip sessions whose JSONL files can't be read
@@ -2361,7 +2381,7 @@ app.get('/api/cost/dashboard', requireAuth, (req, res) => {
       }
 
       for (const session of sessions) {
-        const resumeSessionId = session.resumeSessionId;
+        const resumeSessionId = session.claudeUUID || session.resumeSessionId;
         if (!resumeSessionId) continue;
 
         const jsonlPath = findJsonlFile(resumeSessionId);
@@ -2452,7 +2472,7 @@ app.get('/api/cost/dashboard', requireAuth, (req, res) => {
 
           allSessionCosts.push({
             id: session.id,
-            name: session.name || session.id.substring(0, 12),
+            name: session.displayName || session.name || session.id.substring(0, 12),
             workspaceId: workspace.id,
             workspaceName: workspace.name,
             cost: Math.round(sessionCost * 1000) / 1000,
@@ -2719,8 +2739,8 @@ app.get('/api/sessions/:id/export-context', requireAuth, (req, res) => {
   const session = store.getSession(req.params.id);
 
   // Support both store sessions and direct Claude UUID
-  const claudeSessionId = (session && session.resumeSessionId) || req.params.id;
-  const sessionName = (session && session.name) || claudeSessionId || 'Unknown Session';
+  const claudeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || req.params.id;
+  const sessionName = (session && (session.displayName || session.name)) || claudeSessionId || 'Unknown Session';
 
   if (!claudeSessionId) {
     return res.status(400).json({ error: 'No Claude session ID available' });
@@ -3024,7 +3044,7 @@ function buildConversationSummary(messages) {
 app.post('/api/sessions/:id/extract-tasks', requireAuth, async (req, res) => {
   const store = getStore();
   const session = store.getSession(req.params.id);
-  const claudeSessionId = (session && session.resumeSessionId) || req.params.id;
+  const claudeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || req.params.id;
 
   if (!claudeSessionId) {
     return res.status(400).json({ error: 'No Claude session ID available' });
@@ -3127,7 +3147,7 @@ JSON array:`;
     res.json({
       tasks: sanitized,
       sessionId: req.params.id,
-      sessionName: session ? session.name : claudeSessionId,
+      sessionName: session ? (session.displayName || session.name || session.id) : claudeSessionId,
       filesTouched,
     });
   } catch (err) {
@@ -3153,7 +3173,7 @@ app.post('/api/sessions/:id/spinoff-context', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'title and description are required' });
   }
 
-  const claudeSessionId = (session && session.resumeSessionId) || req.params.id;
+  const claudeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || req.params.id;
   const workingDir = repoDir || (session && session.workingDir) || process.cwd();
 
   try {
@@ -3432,8 +3452,8 @@ app.post('/api/sessions/:id/refocus', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Session not found' });
   }
 
-  const claudeSessionId = session.resumeSessionId || req.params.id;
-  const sessionName = session.name || claudeSessionId || 'Unknown Session';
+  const claudeSessionId = session.claudeUUID || session.resumeSessionId || req.params.id;
+  const sessionName = session.displayName || session.name || claudeSessionId || 'Unknown Session';
 
   if (!claudeSessionId) {
     return res.status(400).json({ error: 'No Claude session ID available' });
@@ -3784,7 +3804,7 @@ app.get('/api/sessions/:id/subagents', requireAuth, (req, res) => {
   const store = getStore();
   const session = store.getSession(req.params.id);
 
-  const resumeSessionId = (session && session.resumeSessionId) || req.params.id;
+  const resumeSessionId = (session && (session.claudeUUID || session.resumeSessionId)) || req.params.id;
   if (!resumeSessionId) {
     return res.json({
       sessionId: req.params.id,
@@ -3956,7 +3976,7 @@ app.post('/api/sessions/:id/summarize', requireAuth, (req, res) => {
   const session = store.getSession(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
 
-  const resumeSessionId = session.resumeSessionId || req.params.id;
+  const resumeSessionId = session.claudeUUID || session.resumeSessionId || req.params.id;
   const jsonlPath = findJsonlFile(resumeSessionId);
 
   if (!jsonlPath) {
@@ -3965,7 +3985,7 @@ app.post('/api/sessions/:id/summarize', requireAuth, (req, res) => {
 
   try {
     const summaryText = generateSessionSummary(jsonlPath);
-    const fullSummary = `**${session.name}**: ${summaryText}`;
+    const fullSummary = `**${session.displayName || session.name || session.id}**: ${summaryText}`;
 
     // Auto-append to workspace docs if session has a workspace
     if (session.workspaceId) {
@@ -4090,19 +4110,23 @@ app.put('/api/project-defaults/:encodedName', requireAuth, (req, res) => {
 //  SESSION NAMES (claudeUUID → display name)
 // ──────────────────────────────────────────────────────────
 
+// DEPRECATED: Phase 4 removal — use session.displayName via /api/sessions
 /**
  * GET /api/session-names
  * Returns the full { [claudeUUID]: string } map.
+ * @deprecated Use session.displayName returned by GET /api/sessions or GET /api/sessions/:id
  */
 app.get('/api/session-names', requireAuth, (req, res) => {
   const store = getStore();
   res.json({ names: store.getAllSessionNames(), sources: store.getAllSessionNameSources() });
 });
 
+// DEPRECATED: Phase 4 removal — use session.displayName via /api/sessions
 /**
  * PUT /api/session-names/:claudeId
  * Body: { name: string }
  * Persists a display name for the given Claude session UUID.
+ * @deprecated Use PUT /api/sessions/:id with { displayName, nameSource } instead
  */
 app.put('/api/session-names/:claudeId', requireAuth, (req, res) => {
   const claudeId = (req.params.claudeId || '').trim(); // normalise once before validation
@@ -4653,7 +4677,7 @@ app.get('/api/resources', requireAuth, async (req, res) => {
         const workspace = workspaces.find(w => w.id === s.workspaceId);
         return {
           sessionId: s.id,
-          sessionName: s.name || s.id.substring(0, 12),
+          sessionName: s.displayName || s.name || s.id.substring(0, 12),
           workspaceName: workspace ? workspace.name : null,
           workingDir: s.workingDir || null,
           pid: s.pid,
@@ -6249,23 +6273,23 @@ function getGlobalSessionFileMap() {
 
   const store = getStore();
   const allSessions = store.getAllSessionsList();
-  // Only check sessions that are running or recently active (have a resumeSessionId for JSONL lookup)
+  // Only check sessions that are running or recently active (have a claudeUUID/resumeSessionId for JSONL lookup)
   const activeSessions = allSessions.filter(s =>
-    (s.status === 'running' || s.status === 'idle') && s.resumeSessionId
+    (s.status === 'running' || s.status === 'idle') && (s.claudeUUID || s.resumeSessionId)
   );
 
   const sessionFiles = new Map();
   let checkedSessions = 0;
 
   for (const session of activeSessions) {
-    const jsonlPath = findJsonlFile(session.resumeSessionId);
+    const jsonlPath = findJsonlFile(session.claudeUUID || session.resumeSessionId);
     if (!jsonlPath) continue;
     checkedSessions++;
     const files = extractModifiedFilesFromJsonl(jsonlPath);
     if (files.size > 0) {
       sessionFiles.set(session.id, {
         id: session.id,
-        name: session.name || session.id.substring(0, 12),
+        name: session.displayName || session.name || session.id.substring(0, 12),
         files,
       });
     }
@@ -6411,7 +6435,7 @@ app.get('/api/workspaces/:id/conflicts', requireAuth, (req, res) => {
       if (modifiedFiles.length > 0) {
         sessionFiles.set(session.id, {
           id: session.id,
-          name: session.name || session.id.substring(0, 12),
+          name: session.displayName || session.name || session.id.substring(0, 12),
           files: modifiedFiles,
         });
       }
@@ -6525,7 +6549,7 @@ app.get('/api/browse', requireAuth, (req, res) => {
 let _ptyManager = null;
 
 /**
- * Backfill resumeSessionId for sessions that have a workingDir but no resumeSessionId.
+ * Backfill claudeUUID/resumeSessionId for sessions that have a workingDir but no UUID.
  * This ensures cost tracking works for discovered/imported sessions and any sessions
  * where PTY backfill failed. Runs once at startup, non-blocking.
  */
@@ -6536,7 +6560,8 @@ function backfillResumeSessionIds() {
     let backfilled = 0;
 
     for (const session of sessions) {
-      if (session.resumeSessionId || !session.workingDir) continue;
+      // Skip if already has claudeUUID or resumeSessionId, or has no workingDir to search with
+      if (session.claudeUUID || session.resumeSessionId || !session.workingDir) continue;
 
       const result = findJsonlByWorkingDir(session.workingDir);
       if (result) {
