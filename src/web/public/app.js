@@ -3564,14 +3564,22 @@ class CWMApp {
   }
 
   /**
+   * Check if a string looks like a UUID (e.g. 44901f82-d080-4663-b15f-b1d2f385c20c).
+   */
+  static isUUID(str) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  }
+
+  /**
    * Get the display name for a session, treating UUID-based names as empty/untitled.
    * Returns displayName if set, otherwise the name only if it differs from the UUID.
    */
   getSessionDisplayName(session) {
     if (!session) return '';
-    if (session.displayName) return session.displayName;
+    if (session.displayName && !CWMApp.isUUID(session.displayName)) return session.displayName;
     const claudeUUID = session.claudeUUID || session.resumeSessionId;
-    return (session.name && session.name !== claudeUUID) ? session.name : '';
+    if (session.name && session.name !== claudeUUID && !CWMApp.isUUID(session.name)) return session.name;
+    return '';
   }
 
   /**
@@ -9162,7 +9170,7 @@ class CWMApp {
       const snippet = storedTitle || this.getSessionSnippet(uuid) || name || '';
       const isAutoName = snippet && !isManualName;
 
-      tp.sessionName = snippet || uuid;
+      tp.sessionName = snippet || '';
       tp.sessionNameIsAuto = isAutoName;
 
       // Update DOM title only if pane is in active group
@@ -9170,8 +9178,13 @@ class CWMApp {
         const paneEl = document.getElementById(`term-pane-${slotIdx}`);
         const titleEl = paneEl && paneEl.querySelector('.terminal-pane-title');
         if (titleEl) {
-          titleEl.textContent = tp.sessionName;
-          titleEl.classList.remove('session-name-empty');
+          if (tp.sessionName) {
+            titleEl.textContent = tp.sessionName;
+            titleEl.classList.remove('session-name-empty');
+          } else {
+            titleEl.textContent = '';
+            titleEl.classList.add('session-name-empty');
+          }
           titleEl.classList.toggle('session-name-auto', !!isAutoName);
         }
       }
@@ -9412,7 +9425,7 @@ class CWMApp {
             const fileName = (c.file || 'unknown').split('/').pop();
             const otherSessions = (c.sessions || [])
               .filter(s => s.id !== tp.sessionId)
-              .map(s => s.name || s.id.substring(0, 12));
+              .map(s => this.getSessionDisplayName(s) || s.id.substring(0, 12));
             return `${fileName} -- also edited by: ${otherSessions.join(', ')}`;
           });
           this.showToast(lines.join('\n'), 'warning');
@@ -9757,7 +9770,13 @@ class CWMApp {
         paneEl.hidden = false;
         paneEl.classList.remove('terminal-pane-empty');
         if (titleEl) {
-          titleEl.textContent = tp.sessionName || tp.sessionId;
+          if (tp.sessionName) {
+            titleEl.textContent = tp.sessionName;
+            titleEl.classList.remove('session-name-empty');
+          } else {
+            titleEl.textContent = '';
+            titleEl.classList.add('session-name-empty');
+          }
           titleEl.classList.toggle('session-name-auto', !!tp.sessionNameIsAuto);
         }
         if (closeBtn) closeBtn.hidden = false;
@@ -10883,7 +10902,7 @@ class CWMApp {
               const spawnOpts = {};
               if (s.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
               if (s.workingDir) spawnOpts.cwd = s.workingDir;
-              this.openTerminalInPane(emptySlot, s.id, s.name, spawnOpts);
+              this.openTerminalInPane(emptySlot, s.id, this.getSessionDisplayName(s), spawnOpts);
             },
           }));
         if (sessionItems.length === 0) {
@@ -11531,7 +11550,8 @@ class CWMApp {
         if (p.sessionId) {
           const restoreOpts = Object.assign({}, p.spawnOpts || {});
           if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
-          this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts, !!p.sessionNameIsAuto);
+          const restoreName = (p.sessionName && !CWMApp.isUUID(p.sessionName)) ? p.sessionName : '';
+          this.openTerminalInPane(p.slot, p.sessionId, restoreName, restoreOpts, !!p.sessionNameIsAuto);
         }
       });
     }
@@ -11946,8 +11966,13 @@ class CWMApp {
             paneEl.classList.remove('terminal-pane-empty');
             const titleEl = paneEl.querySelector('.terminal-pane-title');
             if (titleEl) {
-              titleEl.textContent = cached.panes[i].sessionName || cached.panes[i].sessionId;
-              titleEl.classList.remove('session-name-empty');
+              if (cached.panes[i].sessionName) {
+                titleEl.textContent = cached.panes[i].sessionName;
+                titleEl.classList.remove('session-name-empty');
+              } else {
+                titleEl.textContent = '';
+                titleEl.classList.add('session-name-empty');
+              }
               titleEl.classList.toggle('session-name-auto', !!cached.panes[i].sessionNameIsAuto);
             }
             const closeBtn = paneEl.querySelector('.terminal-pane-close');
@@ -11985,7 +12010,8 @@ class CWMApp {
           if (p.sessionId) {
             const restoreOpts = Object.assign({}, p.spawnOpts || {});
             if (this.state.settings.defaultBypassPermissions) restoreOpts.bypassPermissions = true;
-            this.openTerminalInPane(p.slot, p.sessionId, p.sessionName || '', restoreOpts, !!p.sessionNameIsAuto);
+            const restoreName = (p.sessionName && !CWMApp.isUUID(p.sessionName)) ? p.sessionName : '';
+            this.openTerminalInPane(p.slot, p.sessionId, restoreName, restoreOpts, !!p.sessionNameIsAuto);
           }
         });
       }
@@ -12071,7 +12097,7 @@ class CWMApp {
       if (session.flags) spawnOpts.flags = session.flags;
       if (session.model) spawnOpts.model = session.model;
       if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-      this.openTerminalInPane(i, session.id, this.getSessionDisplayName(session) || session.id, spawnOpts);
+      this.openTerminalInPane(i, session.id, this.getSessionDisplayName(session), spawnOpts);
     }
 
     this.renderTerminalGroupTabs();
@@ -12657,7 +12683,7 @@ class CWMApp {
       </div>` +
       wsSessions.map((s) =>
         `<div class="ai-insight-skeleton">
-          <div class="ai-insight-skeleton-label">${this.escapeHtml(s.name || s.id.substring(0, 12))}</div>
+          <div class="ai-insight-skeleton-label">${this.escapeHtml(this.getSessionDisplayName(s) || 'untitled')}</div>
           <div class="ai-insight-skeleton-line"></div>
           <div class="ai-insight-skeleton-line"></div>
           <div class="ai-insight-skeleton-line"></div>
@@ -13308,7 +13334,7 @@ class CWMApp {
 
         html += `<tr>
           <td class="session-name-cell">
-            ${this.escapeHtml(s.sessionName || s.sessionId)}
+            ${this.escapeHtml(s.sessionName || 'untitled')}
             ${s.workspaceName ? '<span class="resource-workspace-label">' + this.escapeHtml(s.workspaceName) + '</span>' : ''}
           </td>
           <td class="pid-cell">${s.pid || '--'}</td>
@@ -13352,7 +13378,7 @@ class CWMApp {
       uniqueStopped.slice(0, 20).forEach(s => {
         const statusColor = s.status === 'error' || s.status === 'crashed' ? 'var(--red)' : 'var(--overlay0)';
         html += `<tr>
-          <td class="session-name-cell">${this.escapeHtml(s.name || s.id.substring(0, 12))}</td>
+          <td class="session-name-cell">${this.escapeHtml(this.getSessionDisplayName(s) || 'untitled')}</td>
           <td style="color:${statusColor}">${s.status || 'stopped'}</td>
           <td>
             <div class="resource-actions">
@@ -15134,7 +15160,7 @@ class CWMApp {
             ${sessions.map(s => `
               <button class="conflict-session-chip${activePaneSessionIds.has(s.id) ? ' conflict-session-protected' : ''}" data-session-id="${s.id}" title="${activePaneSessionIds.has(s.id) ? 'Active pane (protected)' : 'Open in terminal'}">
                 <span class="conflict-session-dot"></span>
-                ${this.escapeHtml(s.name || s.id)}
+                ${this.escapeHtml(this.getSessionDisplayName(s) || 'untitled')}
                 ${activePaneSessionIds.has(s.id) ? '<span class="conflict-protected-icon" title="In active pane">&#128274;</span>' : ''}
               </button>
             `).join('')}
