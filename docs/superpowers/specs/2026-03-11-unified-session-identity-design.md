@@ -37,7 +37,8 @@ Collapse all 6 maps/caches into **one session object** with embedded identity fi
 {
   id: 'local_<uuid>',            // stable, assigned at creation, NEVER changes
   claudeUUID: null | string,     // current Claude UUID, nullable, updated on detection and /clear
-  displayName: string,           // was in sessionNames map
+  previousClaudeUUIDs: string[], // UUIDs from before /clear events, newest first, capped at 50
+  displayName: string,           // was in sessionNames map (and session.name)
   nameSource: 'auto' | 'manual', // was in sessionNameSources map
   workspaceId: string,
   workingDir: string,
@@ -55,7 +56,8 @@ Collapse all 6 maps/caches into **one session object** with embedded identity fi
 
 Key changes from the current shape:
 - `resumeSessionId` renamed to `claudeUUID`
-- `displayName` and `nameSource` moved from separate store maps onto the session object itself
+- `name` renamed to `displayName` (current field is `session.name` — this rename touches ~50 call sites across server.js and app.js; see Migration section for approach)
+- `nameSource` moved from separate `sessionNameSources` map onto the session object
 - `id` is the stable local identifier and is the primary navigation key throughout the system
 
 ---
@@ -134,6 +136,15 @@ Single lookup, no fallback chain.
 4. Session always findable by session.id
    regardless of claudeUUID state
 ```
+
+### Behavior on `/clear`
+
+When `/clear` creates a new conversation and a new UUID is detected:
+- `session.claudeUUID` is updated to the new UUID
+- `session.displayName` is **reset to the new UUID** and `nameSource` set to `'auto'` — the old title described the old conversation and no longer applies
+- Cost tracking starts fresh (new JSONL file)
+- The old UUID's JSONL file remains on disk but is not linked to the session
+- If the user had manually named the session, the manual name is preserved (only auto-names are reset)
 
 ---
 
@@ -240,44 +251,81 @@ Features that read JSONL files (cost tracking, message history) are keyed by Cla
 - After `/clear`, the old JSONL file is no longer associated — cost tracking starts fresh for the new UUID
 - Historical cost data for old UUIDs remains accessible on disk via JSONL files, but is not linked to the managed session object
 
+### Previous UUIDs
+
+The session object includes a `previousClaudeUUIDs` array:
+
+```js
+previousClaudeUUIDs: string[]  // UUIDs from before /clear events, newest first
+```
+
+When `setClaudeUUID()` replaces an old UUID, the old one is pushed to this array. This enables:
+- Aggregate cost views across a session's full history (sum costs across all UUIDs)
+- "Session history" UI showing past conversations
+- Debugging (trace which JSONL files belonged to this terminal)
+
+The array is append-only and capped at 50 entries to prevent unbounded growth.
+
 ---
 
 ## Migration Strategy
 
-The migration is phased to keep the system functional throughout.
+The migration is phased to keep the system functional throughout. Each phase is a separate commit so any phase can be reverted independently.
+
+### Rollback Safety
+
+Old fields (`resumeSessionId`, `name`, `sessionNames`, `sessionNameSources`) are **preserved as read-only** in the state file through Phases 1–3. They are not deleted until Phase 4. This means if a bug is discovered in Phase 2 or 3, the code can be reverted and old fields are still intact.
 
 ### Phase 1 — Store Migration
 
-- Add `claudeUUID`, `displayName`, `nameSource` fields to session objects
-- Build `claudeUUIDIndex` on load
-- On load, if old `sessionNames`/`sessionNameSources` maps are present:
-  - For each entry, find the session with matching `resumeSessionId` (now `claudeUUID`)
-  - Set `displayName`/`nameSource` on it
-  - Delete the old maps after migration
-- Rename `resumeSessionId` → `claudeUUID` on all existing sessions
-- Keep deprecated store methods alive (delegating to new fields) for backward compatibility during Phase 2
+**Field additions:**
+- Add `claudeUUID` field to session objects (copied from `resumeSessionId`)
+- Add `displayName` field (copied from `name`)
+- Add `nameSource` field (default `'auto'`)
+- Add `previousClaudeUUIDs: []` field
+- Build `claudeUUIDIndex` on load from session `claudeUUID` fields
+
+**SessionNames migration:**
+- For each entry in old `sessionNames[uuid]`:
+  - First, try to find a session where `claudeUUID === uuid` (direct match)
+  - If no match, scan `previousClaudeUUIDs` arrays (handles sessions that were `/clear`ed before migration)
+  - If still no match, the name is orphaned — log a warning but do not discard; keep the old map until Phase 4
+- For matched sessions, set `displayName` from `sessionNames` and `nameSource` from `sessionNameSources`
+- **Do not delete** old `sessionNames`/`sessionNameSources` maps yet — they are the rollback safety net
+
+**`name` → `displayName` rename strategy:**
+- In Phase 1, the store populates BOTH `name` and `displayName` on every session (kept in sync)
+- All existing code continues reading `session.name` — no breakage
+- New code can start reading `session.displayName`
+- The store's `createSession()` and `updateSession()` methods sync both fields transparently
+
+**Deprecated store methods:** Keep `setSessionName()`, `getSessionName()`, etc. alive, delegating to new fields. Mark with `// DEPRECATED: remove in Phase 4` comments.
 
 ### Phase 2 — Backend Consolidation
 
 - Update `hook-state-manager.js`: replace `_findSession()` with `store.getSessionByClaudeUUID()`, remove `_liveSessionMap`
 - Update `pty-manager.js`: consolidate detection paths to call `store.setClaudeUUID()`
-- Update server endpoints: remove deprecated session-names endpoints, update session endpoints to include new fields
+- Update server endpoints: add new fields to session response, keep old endpoints working (deprecated)
 - Update SSE payloads: include `sessionId` as primary key in `session:notification`
+- **Rename call sites:** Systematically replace `session.name` reads/writes with `session.displayName` across server.js (~25 sites) and pty-manager.js (~5 sites)
 
 ### Phase 3 — Frontend Consolidation
 
 - Remove `_sessionLocationMap`
 - Update notification handlers to navigate by `sessionId`
 - Remove `sessionNames`/`sessionNameSources` from frontend state
-- Update all UI code that reads session names to use `session.displayName`
+- **Rename call sites:** Replace `session.name` with `session.displayName` across app.js (~25 sites)
 - Update `uuid-detected` handler — no identity remapping needed, only UI refresh
+- Remove deprecated API endpoint calls (`GET /api/session-names`, etc.)
 
-### Phase 4 — Cleanup
+### Phase 4 — Cleanup (after one release cycle of stability)
 
 - Remove deprecated store methods
-- Remove old migration code paths
-- Remove any remaining references to `resumeSessionId`
-- Remove deprecated API endpoints after confirming no consumers remain
+- Remove old `sessionNames`/`sessionNameSources` maps from state file
+- Remove `session.name` field (only `displayName` remains)
+- Remove `session.resumeSessionId` field (only `claudeUUID` remains)
+- Remove deprecated API endpoints
+- Remove migration/sync code from store
 
 ---
 
@@ -331,6 +379,8 @@ No-op. Index entry already exists and points to the correct session. No event em
 - Load old-format state file with `sessionNames`/`sessionNameSources` maps → verify fields migrated to session objects correctly
 - Load old-format state file with `resumeSessionId` → verify renamed to `claudeUUID`
 - Load state after migration → verify `claudeUUIDIndex` is built correctly
+- Load state where a `sessionNames` entry has a UUID that doesn't match any session's current `resumeSessionId` (orphaned by prior `/clear`) → verify warning is logged and old map is preserved
+- Verify rollback: revert to Phase 1 code after Phase 2 changes → old `name`, `resumeSessionId`, `sessionNames` fields still intact and functional
 
 ### Regression Tests
 
