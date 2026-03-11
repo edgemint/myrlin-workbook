@@ -3535,11 +3535,12 @@ class CWMApp {
   getProjectSessionTitle(claudeSessionId) {
     const all = this.state.allSessions || this.state.sessions || [];
     const match = all.find(s => s.resumeSessionId === claudeSessionId || s.id === claudeSessionId);
-    if (match && match.displayName) return match.displayName;
+    // Return displayName if set and not a UUID; ignore UUID-based names
+    if (match && match.displayName && match.displayName !== claudeSessionId) return match.displayName;
     // Also search project session objects
     for (const p of (this.state.projects || [])) {
       for (const s of (p.sessions || [])) {
-        if (s.name === claudeSessionId && s.displayName) return s.displayName;
+        if (s.name === claudeSessionId && s.displayName && s.displayName !== claudeSessionId) return s.displayName;
       }
     }
     return null;
