@@ -73,7 +73,7 @@ function update(panel, session) {
   let content = '';
 
   // Header
-  content += ` {${theme.colors.primary}-fg}{bold}${session.name}{/bold}{/}\n`;
+  content += ` {${theme.colors.primary}-fg}{bold}${session.displayName || session.name}{/bold}{/}\n`;
   content += ` {${color}-fg}${icon} ${label}{/}\n`;
   content += sep + '\n';
 

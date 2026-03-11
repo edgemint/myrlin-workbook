@@ -80,16 +80,16 @@ class NotificationManager extends EventEmitter {
     const store = getStore();
 
     store.on('session:created', (session) => {
-      this.notify('info', 'Session Created', `"${session.name}" added to workspace`);
+      this.notify('info', 'Session Created', `"${session.displayName || session.name}" added to workspace`);
     });
 
     store.on('session:updated', (session) => {
       if (session.status === 'running') {
-        this.notify('success', 'Session Started', `"${session.name}" is now running (PID: ${session.pid})`);
+        this.notify('success', 'Session Started', `"${session.displayName || session.name}" is now running (PID: ${session.pid})`);
       } else if (session.status === 'stopped') {
-        this.notify('info', 'Session Stopped', `"${session.name}" has stopped`);
+        this.notify('info', 'Session Stopped', `"${session.displayName || session.name}" has stopped`);
       } else if (session.status === 'error') {
-        this.notify('error', 'Session Error', `"${session.name}" encountered an error`);
+        this.notify('error', 'Session Error', `"${session.displayName || session.name}" encountered an error`);
       }
     });
 
