@@ -58,6 +58,7 @@ class Store extends EventEmitter {
   constructor() {
     super();
     this._state = null;
+    this._claudeUUIDIndex = new Map();
     this._dirty = false;
     this._saveTimer = null;
   }
@@ -73,6 +74,9 @@ class Store extends EventEmitter {
     // Create a timestamped backup BEFORE loading (preserves last known good state)
     this.createTimestampedBackup();
     this._state = this._load();
+    const migrated = this._migrateState(this._state);
+    this._buildClaudeUUIDIndex();
+    if (migrated) this.save();
     return this;
   }
 
@@ -136,6 +140,100 @@ class Store extends EventEmitter {
       };
     } catch (_) {
       return null;
+    }
+  }
+
+  /**
+   * Migrate persisted state from old field layout to new unified identity shape.
+   * Copies resumeSessionId → claudeUUID, name → displayName, adds nameSource and
+   * previousClaudeUUIDs. Also migrates sessionNames / sessionNameSources maps onto
+   * individual session objects.
+   *
+   * Old fields (resumeSessionId, name, sessionNames, sessionNameSources) are kept
+   * for backward compat (Phase 1). They will be removed in Phase 4.
+   *
+   * @param {object} state - The loaded state object (mutated in place)
+   * @returns {boolean} true if any field was changed (caller should save)
+   */
+  _migrateState(state) {
+    let dirty = false;
+    const sessions = state.sessions || {};
+    const sessionNames = state.sessionNames || {};
+    const sessionNameSources = state.sessionNameSources || {};
+
+    for (const session of Object.values(sessions)) {
+      // a) resumeSessionId → claudeUUID
+      if (session.claudeUUID === undefined) {
+        session.claudeUUID = session.resumeSessionId || null;
+        dirty = true;
+      }
+
+      // b) name → displayName (default to name, then id)
+      if (session.displayName === undefined) {
+        session.displayName = session.name || session.id;
+        dirty = true;
+      }
+
+      // c) nameSource default
+      if (session.nameSource === undefined) {
+        session.nameSource = 'auto';
+        dirty = true;
+      }
+
+      // d) previousClaudeUUIDs init
+      if (session.previousClaudeUUIDs === undefined) {
+        session.previousClaudeUUIDs = [];
+        dirty = true;
+      }
+    }
+
+    // Migrate sessionNames map entries onto session objects by matching claudeUUID.
+    // First build a lookup of claudeUUID → session for fast matching.
+    const uuidToSession = new Map();
+    for (const session of Object.values(sessions)) {
+      if (session.claudeUUID) uuidToSession.set(session.claudeUUID, session);
+      // Also try previousClaudeUUIDs as fallback for sessions that were /clear'd before migration
+      for (const prev of (session.previousClaudeUUIDs || [])) {
+        if (!uuidToSession.has(prev)) uuidToSession.set(prev, session);
+      }
+    }
+
+    for (const [uuid, name] of Object.entries(sessionNames)) {
+      const session = uuidToSession.get(uuid);
+      if (!session) {
+        // Orphaned entry — log warning but keep the old map intact (rollback safety)
+        console.warn(`[Store] _migrateState: orphaned sessionNames entry for UUID ${uuid} — no matching session found`);
+        continue;
+      }
+      const source = sessionNameSources[uuid] || 'auto';
+      // Only overwrite if name has not already been set from a direct claudeUUID match
+      // (avoid a previousClaudeUUIDs match clobbering the current displayName)
+      if (session.claudeUUID === uuid) {
+        // Direct match — always migrate
+        session.displayName = name;
+        session.nameSource = source;
+        dirty = true;
+      } else if (session.displayName === session.name || session.displayName === session.id) {
+        // Fallback via previousClaudeUUIDs — only if displayName is still the default
+        session.displayName = name;
+        session.nameSource = source;
+        dirty = true;
+      }
+    }
+
+    return dirty;
+  }
+
+  /**
+   * Build the in-memory claudeUUID → sessionId reverse index from persisted session data.
+   * Called once on startup after migration. Never written to disk.
+   */
+  _buildClaudeUUIDIndex() {
+    this._claudeUUIDIndex = new Map();
+    for (const session of Object.values(this._state.sessions || {})) {
+      if (session.claudeUUID) {
+        this._claudeUUIDIndex.set(session.claudeUUID, session.id);
+      }
     }
   }
 
@@ -207,6 +305,73 @@ class Store extends EventEmitter {
 
   getWorkspace(id) { return this._state.workspaces[id] || null; }
   getSession(id) { return this._state.sessions[id] || null; }
+
+  /**
+   * Look up a session by its current Claude UUID using the reverse index.
+   * O(1) lookup. Returns null for unknown UUIDs.
+   * @param {string} claudeUUID
+   * @returns {object|null}
+   */
+  getSessionByClaudeUUID(claudeUUID) {
+    if (!claudeUUID) return null;
+    const sessionId = this._claudeUUIDIndex.get(claudeUUID);
+    if (!sessionId) return null;
+    return this._state.sessions[sessionId] || null;
+  }
+
+  /**
+   * Update (or initially set) the Claude UUID for a session.
+   * - Removes the old index entry if the UUID is changing
+   * - Pushes the old UUID to previousClaudeUUIDs (capped at 50, newest first)
+   * - Resets displayName to the new UUID if nameSource === 'auto' and UUID is changing
+   * - Keeps resumeSessionId in sync for backward compat
+   * - Saves immediately and emits session:uuid-changed
+   *
+   * No-op (returns null) if called with the same UUID the session already has.
+   *
+   * @param {string} sessionId - Internal session ID
+   * @param {string} newUUID   - New Claude UUID
+   * @returns {{ sessionId: string, oldUUID: string|null, newUUID: string } | null}
+   */
+  setClaudeUUID(sessionId, newUUID) {
+    if (!sessionId || !newUUID) return null;
+    const session = this._state.sessions[sessionId];
+    if (!session) return null;
+
+    const oldUUID = session.claudeUUID || null;
+
+    // No-op if same UUID
+    if (oldUUID === newUUID) return null;
+
+    // Remove old index entry
+    if (oldUUID) {
+      this._claudeUUIDIndex.delete(oldUUID);
+      // Push old UUID to history (newest first, capped at 50)
+      session.previousClaudeUUIDs = session.previousClaudeUUIDs || [];
+      session.previousClaudeUUIDs.unshift(oldUUID);
+      if (session.previousClaudeUUIDs.length > 50) {
+        session.previousClaudeUUIDs = session.previousClaudeUUIDs.slice(0, 50);
+      }
+      // Auto-named sessions have their displayName reset to the new UUID
+      // (the old name described the old conversation)
+      if (session.nameSource === 'auto') {
+        session.displayName = newUUID;
+        session.name = newUUID; // keep name in sync (backward compat)
+      }
+    }
+
+    // Apply new UUID
+    session.claudeUUID = newUUID;
+    session.resumeSessionId = newUUID; // backward compat
+    session.lastActive = new Date().toISOString();
+
+    // Update index
+    this._claudeUUIDIndex.set(newUUID, sessionId);
+
+    this.save();
+    this.emit('session:uuid-changed', { sessionId, oldUUID, newUUID });
+    return { sessionId, oldUUID, newUUID };
+  }
 
   getWorkspaceSessions(workspaceId) {
     const ws = this.getWorkspace(workspaceId);
@@ -366,18 +531,23 @@ class Store extends EventEmitter {
 
   // ─── Session CRUD ────────────────────────────────────────
 
-  createSession({ name, workspaceId, workingDir = '', topic = '', command = 'claude', resumeSessionId = null, tags = [] }) {
+  createSession({ name, workspaceId, workingDir = '', topic = '', command = 'claude', resumeSessionId = null, tags = [], displayName, nameSource = 'auto' }) {
     if (!this._state.workspaces[workspaceId]) return null;
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const resolvedDisplayName = displayName || name || id;
     const session = {
       id,
-      name,
+      name: resolvedDisplayName,          // keep name in sync (backward compat)
+      displayName: resolvedDisplayName,
+      nameSource,
       workspaceId,
       workingDir,
       topic,
       command,
-      resumeSessionId,
+      resumeSessionId,                    // keep for backward compat
+      claudeUUID: resumeSessionId,        // new canonical field
+      previousClaudeUUIDs: [],
       status: 'stopped', // 'running' | 'stopped' | 'error' | 'idle'
       pid: null,
       tags: Array.isArray(tags) ? tags : [],
@@ -389,6 +559,10 @@ class Store extends EventEmitter {
     this._state.sessions[id] = session;
     this._state.workspaces[workspaceId].sessions.push(id);
     this._state.workspaces[workspaceId].lastActive = now;
+    // Index Claude UUID if present
+    if (resumeSessionId) {
+      this._claudeUUIDIndex.set(resumeSessionId, id);
+    }
     this.save(); // Immediate save - session creation is critical
     this.emit('session:created', session);
     return session;
@@ -407,6 +581,26 @@ class Store extends EventEmitter {
         oldWs.sessions = oldWs.sessions.filter(sid => sid !== id);
       }
       newWs.sessions.push(id);
+    }
+
+    // Sync name ↔ displayName (whichever one is being updated)
+    if (updates.displayName !== undefined && updates.name === undefined) {
+      updates.name = updates.displayName;
+    } else if (updates.name !== undefined && updates.displayName === undefined) {
+      updates.displayName = updates.name;
+    }
+
+    // Sync resumeSessionId ↔ claudeUUID and update reverse index when UUID changes
+    if (updates.claudeUUID !== undefined && updates.resumeSessionId === undefined) {
+      updates.resumeSessionId = updates.claudeUUID;
+    } else if (updates.resumeSessionId !== undefined && updates.claudeUUID === undefined) {
+      updates.claudeUUID = updates.resumeSessionId;
+    }
+    // Update the reverse index if the UUID is changing
+    const newUUID = updates.claudeUUID;
+    if (newUUID !== undefined && newUUID !== session.claudeUUID) {
+      if (session.claudeUUID) this._claudeUUIDIndex.delete(session.claudeUUID);
+      if (newUUID) this._claudeUUIDIndex.set(newUUID, id);
     }
 
     Object.assign(session, updates, { lastActive: new Date().toISOString() });
