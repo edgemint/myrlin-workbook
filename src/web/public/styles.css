@@ -8388,7 +8388,7 @@ html {
 }
 
 .notif-go-to-btn:hover {
-  background: color-mix(in srgb, var(--blue) 120%, transparent);
+  background: color-mix(in srgb, var(--blue) 85%, white);
 }
 
 .notif-go-to-btn:active {
