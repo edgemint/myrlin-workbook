@@ -1433,7 +1433,7 @@ class CWMApp {
             if (session.verbose) spawnOpts.verbose = true;
             if (session.model) spawnOpts.model = session.model;
             if (session.agentTeams) spawnOpts.agentTeams = true;
-            this.openTerminalInPane(emptySlot, sessionId, session.displayName || session.name, spawnOpts);
+            this.openTerminalInPane(emptySlot, sessionId, this.getSessionDisplayName(session), spawnOpts);
           } else {
             this.showToast('All terminal panes are full. Close one first.', 'warning');
           }
@@ -1829,7 +1829,7 @@ class CWMApp {
           if (emptySlot !== -1) {
             try {
               const session = await this.ensureSessionRegistered(sessName, sessName, projectPath);
-              this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
+              this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), {
                 cwd: projectPath,
                 resumeSessionId: sessName,
                 command: 'claude',
@@ -2372,7 +2372,7 @@ class CWMApp {
     if (session && (!session.status || session.status === 'stopped')) {
       const confirmed = await this.showConfirmModal({
         title: 'Start Session?',
-        message: `<strong>${(session.displayName || session.name) ? this.escapeHtml(session.displayName || session.name) : 'This session'}</strong> is not running. Would you like to start it?`,
+        message: `<strong>${this.getSessionDisplayName(session) ? this.escapeHtml(this.getSessionDisplayName(session)) : 'This session'}</strong> is not running. Would you like to start it?`,
         confirmText: 'Start',
         confirmClass: 'btn-primary',
       });
@@ -2470,7 +2470,7 @@ class CWMApp {
     try {
       const data = await this.api('POST', '/api/sessions', result);
       const session = data.session || data;
-      this.showToast(`Session "${session.displayName || session.name || 'New'}" created`, 'success');
+      this.showToast(`Session "${this.getSessionDisplayName(session) || 'New'}" created`, 'success');
       await this.loadSessions();
       await this.loadStats();
     } catch (err) {
@@ -2482,7 +2482,7 @@ class CWMApp {
     const result = await this.showPromptModal({
       title: 'Save as Template',
       fields: [
-        { key: 'name', label: 'Template Name', placeholder: session.displayName || session.name || 'My Template', required: true, value: session.displayName || session.name || '' },
+        { key: 'name', label: 'Template Name', placeholder: this.getSessionDisplayName(session) || 'My Template', required: true, value: this.getSessionDisplayName(session) || '' },
       ],
       confirmText: 'Save',
       confirmClass: 'btn-primary',
@@ -2528,7 +2528,7 @@ class CWMApp {
         this.setViewMode('terminal');
         const spawnOpts = { cwd: dir, newSession: true };
         if (flags.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-        this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, spawnOpts);
+        this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), spawnOpts);
       }
     } catch (err) {
       this.showToast(err.message || 'Failed to create session', 'error');
@@ -2544,7 +2544,7 @@ class CWMApp {
     const resultPromise = this.showPromptModal({
       title: 'Edit Session',
       fields: [
-        { key: 'name', label: 'Name', value: session.displayName || session.name, required: true },
+        { key: 'name', label: 'Name', value: this.getSessionDisplayName(session), required: true },
         { key: 'topic', label: 'Topic', value: session.topic || '' },
         { key: 'workingDir', label: 'Working Directory', value: session.workingDir || '' },
       ],
@@ -2603,7 +2603,7 @@ class CWMApp {
     }
     this.renderWorkspaces();
     this.renderSessions();
-    this.showToast(`Hidden "${session.displayName || session.name}" - toggle "Show hidden" to see it again`, 'info');
+    this.showToast(`Hidden "${this.getSessionDisplayName(session) || 'untitled'}" - toggle "Show hidden" to see it again`, 'info');
   }
 
   unhideSession(id) {
@@ -2626,7 +2626,7 @@ class CWMApp {
       if (allSession && allSession !== session) allSession.workspaceId = targetWorkspaceId;
       this.renderWorkspaces();
       this.renderSessions();
-      this.showToast(`Moved "${session.displayName || session.name || 'untitled'}" to "${targetWs.name}"`, 'success');
+      this.showToast(`Moved "${this.getSessionDisplayName(session) || 'untitled'}" to "${targetWs.name}"`, 'success');
     } catch (err) {
       this.showToast('Failed to move session: ' + (err.message || ''), 'error');
     }
@@ -2663,7 +2663,7 @@ class CWMApp {
 
     const confirmed = await this.showConfirmModal({
       title: 'Remove Session',
-      message: `Remove "${session.displayName || session.name}" from this project? This deletes the session record (your Claude conversation files are not affected).`,
+      message: `Remove "${this.getSessionDisplayName(session) || 'untitled'}" from this project? This deletes the session record (your Claude conversation files are not affected).`,
       confirmText: 'Remove',
       confirmClass: 'btn-danger',
     });
@@ -2680,7 +2680,7 @@ class CWMApp {
       }
       this.renderWorkspaces();
       this.renderSessions();
-      this.showToast(`Removed "${session.displayName || session.name}"`, 'success');
+      this.showToast(`Removed "${this.getSessionDisplayName(session) || 'untitled'}"`, 'success');
     } catch (err) {
       this.showToast('Failed to remove session: ' + (err.message || ''), 'error');
     }
@@ -2942,7 +2942,7 @@ class CWMApp {
           if (session.verbose) spawnOpts.verbose = true;
           if (session.model) spawnOpts.model = session.model;
           if (session.agentTeams) spawnOpts.agentTeams = true;
-          this.openTerminalInPane(emptySlot, sessionId, session.displayName || session.name, spawnOpts);
+          this.openTerminalInPane(emptySlot, sessionId, this.getSessionDisplayName(session), spawnOpts);
         } else {
           this.showToast('All terminal panes full. Close one first.', 'warning');
         }
@@ -2963,7 +2963,7 @@ class CWMApp {
             if (session.verbose) spawnOpts.verbose = true;
             if (session.model) spawnOpts.model = session.model;
             if (session.agentTeams) spawnOpts.agentTeams = true;
-            this.openTerminalInPane(emptySlot, sessionId, session.displayName || session.name, spawnOpts);
+            this.openTerminalInPane(emptySlot, sessionId, this.getSessionDisplayName(session), spawnOpts);
           } else {
             this.showToast('All terminal panes full. Close one first.', 'warning');
           }
@@ -2977,7 +2977,7 @@ class CWMApp {
     const sessionItems = this._buildSessionContextItems(sessionId);
     if (sessionItems) items.push(...sessionItems);
 
-    this._renderContextItems(session.displayName || session.name, items, x, y);
+    this._renderContextItems(this.getSessionDisplayName(session) || 'untitled', items, x, y);
   }
 
   hideContextMenu() {
@@ -3054,7 +3054,7 @@ class CWMApp {
         }
         try {
           const session = await this.ensureSessionRegistered(sessionName, sessionName, projectPath);
-          this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
+          this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), {
             cwd: projectPath,
             resumeSessionId: sessionName,
             command: 'claude',
@@ -3082,7 +3082,7 @@ class CWMApp {
           }
           try {
             const session = await this.ensureSessionRegistered(sessionName, sessionName, projectPath);
-            this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
+            this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), {
               cwd: projectPath,
               resumeSessionId: sessionName,
               command: 'claude',
@@ -3560,6 +3560,17 @@ class CWMApp {
       }
     }
     return null;
+  }
+
+  /**
+   * Get the display name for a session, treating UUID-based names as empty/untitled.
+   * Returns displayName if set, otherwise the name only if it differs from the UUID.
+   */
+  getSessionDisplayName(session) {
+    if (!session) return '';
+    if (session.displayName) return session.displayName;
+    const claudeUUID = session.claudeUUID || session.resumeSessionId;
+    return (session.name && session.name !== claudeUUID) ? session.name : '';
   }
 
   /**
@@ -5787,7 +5798,7 @@ class CWMApp {
 
     // Get session info for display
     const session = (this.state.allSessions || this.state.sessions).find(s => s.id === sessionId);
-    const sessionName = session ? (session.displayName || session.name || sessionId) : sessionId;
+    const sessionName = session ? (this.getSessionDisplayName(session) || sessionId) : sessionId;
 
     // Show dialog in loading state
     this.els.spinoffOverlay.hidden = false;
@@ -5998,7 +6009,7 @@ class CWMApp {
             if (item.session) {
               const emptySlot = this.terminalPanes.findIndex(p => p === null);
               if (emptySlot !== -1) {
-                this.openTerminalInPane(emptySlot, item.session.id, item.task.branch || item.session.displayName || item.session.name, {
+                this.openTerminalInPane(emptySlot, item.session.id, item.task.branch || this.getSessionDisplayName(item.session), {
                   cwd: item.task.worktreePath,
                   ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
                 });
@@ -8066,7 +8077,7 @@ class CWMApp {
             <span class="status-dot ${statusClass}"></span>
           </div>
           <div class="session-info">
-            <div class="session-name">${s.name ? this.escapeHtml(s.name) : '<span class="session-name-empty">untitled</span>'} ${flagBadges.join(' ')}${this.hookStateBadgeHtml(s)}</div>
+            <div class="session-name">${s.name && s.name !== (s.claudeUUID || s.resumeSessionId) ? this.escapeHtml(s.name) : '<span class="session-name-empty">untitled</span>'} ${flagBadges.join(' ')}${this.hookStateBadgeHtml(s)}</div>
             <div class="session-meta-row">
               ${s.workingDir ? `<span class="session-dir" title="${this.escapeHtml(s.workingDir)}">${this.escapeHtml(this.truncatePath(s.workingDir))}</span>` : ''}
               ${s.topic ? `<span class="session-topic">${this.escapeHtml(s.topic)}</span>` : ''}
@@ -8111,8 +8122,9 @@ class CWMApp {
     const _detailStatus = session.status === 'running' ? (_detailActive ? 'running' : 'idle') : (session.status || 'stopped');
     this.els.detailStatusDot.className = `detail-status-dot status-dot-${_detailStatus}`;
 
-    // Title
-    const _detailName = session.displayName || session.name;
+    // Title — treat UUID-based names (where name === resumeSessionId) as untitled
+    const claudeUUID = session.claudeUUID || session.resumeSessionId;
+    const _detailName = session.displayName || (session.name && session.name !== claudeUUID ? session.name : '');
     if (_detailName) {
       this.els.detailTitle.textContent = _detailName;
       this.els.detailTitle.classList.remove('session-name-empty');
@@ -8560,12 +8572,13 @@ class CWMApp {
         const sessName = s.name || 'unnamed';
         const storedTitle = this.getProjectSessionTitle(sessName);
         const isAutoName = storedTitle && this.getSessionNameSource(sessName) === 'auto';
-        const displayTitle = storedTitle || '';
+        // Treat UUID-based names (where displayTitle === sessName) as untitled
+        const displayTitle = (storedTitle && storedTitle !== sessName) ? storedTitle : '';
         const sessSize = s.size ? this.formatSize(s.size) : '';
         const sessTime = s.modified ? this.relativeTime(s.modified) : '';
         // Tooltip: show title + session ID so user sees both on hover
-        const tooltip = storedTitle
-          ? `${storedTitle}\n\nSession: ${sessName}`
+        const tooltip = displayTitle
+          ? `${displayTitle}\n\nSession: ${sessName}`
           : (s.snippet ? `${s.snippet}\n\nSession: ${sessName}` : sessName);
         const isOpen = activeIds.has(sessName);
         const untitledLabel = s.snippet ? this.escapeHtml(s.snippet) : 'untitled';
@@ -8731,7 +8744,7 @@ class CWMApp {
     try {
       const session = await this.ensureSessionRegistered(sessionId, sessionId, projectPath);
       this.setViewMode('terminal');
-      this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
+      this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), {
         cwd: projectPath,
         resumeSessionId: sessionId,
         command: 'claude',
@@ -8837,7 +8850,7 @@ class CWMApp {
               if (session.model) spawnOpts.model = session.model;
               if (session.agentTeams) spawnOpts.agentTeams = true;
             }
-            this.openTerminalInPane(slotIdx, sessionId, session ? (session.displayName || session.name) : 'Terminal', spawnOpts);
+            this.openTerminalInPane(slotIdx, sessionId, session ? this.getSessionDisplayName(session) : 'Terminal', spawnOpts);
             return;
           }
 
@@ -8856,7 +8869,7 @@ class CWMApp {
               }
               console.log('[DnD] Project-session drop - resumeSessionId:', claudeSessionId, 'cwd:', ps.projectPath);
               const session = await this.ensureSessionRegistered(claudeSessionId, claudeSessionId, ps.projectPath);
-              this.openTerminalInPane(slotIdx, session.id, session.displayName || session.name, {
+              this.openTerminalInPane(slotIdx, session.id, this.getSessionDisplayName(session), {
                 cwd: ps.projectPath,
                 resumeSessionId: claudeSessionId,
                 command: 'claude',
@@ -8886,7 +8899,7 @@ class CWMApp {
               await this.loadSessions();
               const spawnOpts = { cwd: project.path, command: 'claude', newSession: true };
               if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-              this.openTerminalInPane(slotIdx, session.id, session.displayName || session.name, spawnOpts);
+              this.openTerminalInPane(slotIdx, session.id, this.getSessionDisplayName(session), spawnOpts);
               this.showToast('Opening project', 'info');
             } catch (err) {
               this.showToast(err.message || 'Failed to open project', 'error');
@@ -12047,7 +12060,7 @@ class CWMApp {
       if (session.flags) spawnOpts.flags = session.flags;
       if (session.model) spawnOpts.model = session.model;
       if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-      this.openTerminalInPane(i, session.id, session.displayName || session.name || session.id, spawnOpts);
+      this.openTerminalInPane(i, session.id, this.getSessionDisplayName(session) || session.id, spawnOpts);
     }
 
     this.renderTerminalGroupTabs();
@@ -12679,7 +12692,7 @@ class CWMApp {
       const sizeKB = data.fileSize ? Math.round(data.fileSize / 1024) : '?';
       return `<div class="ai-insight-card">
         <div class="ai-insight-header">
-          <span class="ai-insight-name">${this.escapeHtml(session.displayName || session.name)}</span>
+          <span class="ai-insight-name">${this.escapeHtml(this.getSessionDisplayName(session) || 'untitled')}</span>
           <span class="ai-insight-badge">${sizeKB}KB / ${data.messageCount || '?'} msgs</span>
         </div>
         <div class="ai-insight-theme"><strong>Theme:</strong> ${this.escapeHtml(data.overallTheme || 'Unknown')}</div>
@@ -14602,7 +14615,7 @@ class CWMApp {
               workspaceId: session.workspaceId,
               workingDir: session.workingDir || '',
               command: 'claude',
-              topic: `Continued from: ${session.displayName || session.name || session.id}`,
+              topic: `Continued from: ${this.getSessionDisplayName(session) || session.id}`,
             };
             if (session.model) payload.model = session.model;
             if (session.bypassPermissions) payload.bypassPermissions = true;
@@ -15710,7 +15723,7 @@ class CWMApp {
     if (session.agentTeams) spawnOpts.agentTeams = true;
 
     this.setViewMode('terminal');
-    this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, spawnOpts);
+    this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), spawnOpts);
     this.closeSessionManager();
   }
 
@@ -16043,7 +16056,7 @@ class CWMApp {
 
     const workspaceId = await this.findOrCreateWorkspaceForDir(projectPath);
     const storedTitle = this.getProjectSessionTitle(claudeUUID);
-    const name = storedTitle || fallbackName;
+    const name = storedTitle || '';
 
     const data = await this.api('POST', '/api/sessions', {
       name,
@@ -16092,7 +16105,7 @@ class CWMApp {
       const data = await this.api('POST', '/api/sessions', payload);
       const session = data.session || data;
 
-      this.showToast(`Session "${session.displayName || session.name}" created`, 'success');
+      this.showToast(`Session "${this.getSessionDisplayName(session) || 'New'}" created`, 'success');
       await this.loadSessions();
       await this.loadStats();
 
@@ -16103,7 +16116,7 @@ class CWMApp {
         if (model) spawnOpts.model = model;
         if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
         this.setViewMode('terminal');
-        this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, spawnOpts);
+        this.openTerminalInPane(emptySlot, session.id, this.getSessionDisplayName(session), spawnOpts);
       } else {
         this.showToast('All terminal panes full. Close one first.', 'warning');
       }
