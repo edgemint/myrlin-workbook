@@ -7798,8 +7798,9 @@ class CWMApp {
             session.hookState = data.data.hookState;
           }
         }
-        // Re-render session list to show new state badge
+        // Re-render session list and tabs to show updated state badges
         this.loadSessions().then(() => { if (this._smOpen) this.renderSessionManager(); });
+        this.renderTerminalGroupTabs();
         break;
       }
 
@@ -11548,7 +11549,7 @@ class CWMApp {
       return tp !== null;
     });
 
-    // Count session statuses
+    // Count session hook states (source of truth from server)
     let runningCount = 0;
     let idleCount = 0;
     let totalCount = 0;
@@ -11560,8 +11561,9 @@ class CWMApp {
           totalCount++;
           const session = (this.state.allSessions || this.state.sessions || []).find(s => s.id === tp.sessionId);
           if (session) {
-            if (session.status === 'running') runningCount++;
-            else if (session.status === 'idle') idleCount++;
+            // hookState: 'active' | 'awaiting_input' | 'idle' | 'stopped' | 'error'
+            if (session.hookState === 'active' || session.hookState === 'awaiting_input') runningCount++;
+            else if (session.hookState === 'idle') idleCount++;
           }
         }
       }
