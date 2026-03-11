@@ -7641,14 +7641,18 @@ class CWMApp {
     // Render newest first
     const sorted = [...this._notifications].reverse();
     list.innerHTML = sorted.map(n => {
-      const isClickable = !!n.sessionId;
-      return `<div class="notif-item${n.read ? '' : ' notif-unread'}${isClickable ? ' notif-clickable' : ''}" data-notif-id="${n.id}"${isClickable ? ` data-session-id="${this.escapeHtml(n.sessionId)}"` : ''}>
+      const hasSession = !!n.sessionId;
+      const rightContent = hasSession
+        ? `<button class="notif-go-to-btn" title="Go to this session">Go to session</button>`
+        : `<span class="notif-item-dot"></span>`;
+
+      return `<div class="notif-item${n.read ? '' : ' notif-unread'}" data-notif-id="${n.id}"${hasSession ? ` data-session-id="${this.escapeHtml(n.sessionId)}"` : ''}>
         <span class="notif-item-icon notif-${n.level}">${icons[n.level] || icons.info}</span>
         <div class="notif-item-body">
           <div class="notif-item-message">${this.escapeHtml(n.message)}</div>
           <div class="notif-item-time">${this.relativeTime(n.timestamp)}</div>
         </div>
-        <span class="notif-item-dot"></span>
+        ${rightContent}
       </div>`;
     }).join('');
 
