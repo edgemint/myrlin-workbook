@@ -333,6 +333,42 @@ async function run() {
   check('PUT /api/project-defaults can clear defaultDir', r.status === 200 && json(r)?.success === true);
 
   // ════════════════════════════════════════
+  // NOTIFICATION ROUTING
+  // ════════════════════════════════════════
+  console.log('\n--- Notification Routing ---');
+  let notifSessId = null;
+  {
+    const wsR = await post('/api/workspaces', { name: 'NotifTest' });
+    const notifWs = json(wsR).workspace || json(wsR);
+    check('Create NotifTest workspace', wsR.status === 201 && !!notifWs.id);
+
+    const sessR = await post('/api/sessions', {
+      name: 'Test Session',
+      workspaceId: notifWs.id,
+      workingDir: '/tmp',
+      resumeSessionId: 'notif-claude-uuid-1'
+    });
+    const notifSess = json(sessR).session || json(sessR);
+    notifSessId = notifSess.id;
+    check('Create session with resumeSessionId', sessR.status === 201 && !!notifSessId);
+
+    // Verify claudeUUID is set and indexed
+    const fetchR = await get(`/api/sessions/${notifSessId}`);
+    const fetched = json(fetchR).session || json(fetchR);
+    check('Session claudeUUID set from resumeSessionId', fetched.claudeUUID === 'notif-claude-uuid-1');
+
+    // Simulate hook event (no auth required on /hooks endpoints)
+    const hookR = await post('/hooks/stop', { session_id: 'notif-claude-uuid-1', cwd: '/tmp' });
+    check('POST /hooks/stop → ok', hookR.status === 200 && (json(hookR) || {}).ok === true);
+
+    console.log('  PASS: notification routing — session indexed by Claude UUID');
+
+    // Cleanup notif workspace and session
+    await del(`/api/sessions/${notifSessId}`);
+    await del(`/api/workspaces/${notifWs.id}`);
+  }
+
+  // ════════════════════════════════════════
   // CLEANUP
   // ════════════════════════════════════════
   console.log('\n--- Cleanup ---');

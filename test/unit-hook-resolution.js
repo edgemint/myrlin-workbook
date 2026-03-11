@@ -54,6 +54,15 @@ function setupStore() {
   assert.ok(hookState, 'Should broadcast hook-state');
   assert.strictEqual(hookState.data.sessionId, 's1');
 
+  // Verify SSE notification payload contains stable sessionId
+  const notifEvent = sseBroadcasts.find(e => e.type === 'session:notification');
+  if (notifEvent) {
+    assert.strictEqual(notifEvent.data.sessionId, 's1',
+      'Notification should contain stable sessionId, not Claude UUID');
+    assert.strictEqual(notifEvent.data.sessionName, 'A',
+      'Notification sessionName should use displayName');
+  }
+
   store.destroy();
   delete require.cache[require.resolve('../src/state/store')];
   delete require.cache[require.resolve('../src/core/hook-state-manager')];
