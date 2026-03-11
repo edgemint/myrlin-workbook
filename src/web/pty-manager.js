@@ -126,12 +126,15 @@ class PtySessionManager {
    * @param {boolean} [options.bypassPermissions=false] - If true, adds --dangerously-skip-permissions
    * @returns {PtySession} The PTY session object
    */
-  spawnSession(sessionId, { command = 'claude', cwd, cols = 120, rows = 30, bypassPermissions = false, resumeSessionId = null, verbose = false, model = null, agentTeams = false, shell: requestedShell = null, newSession = false } = {}) {
+  spawnSession(sessionId, { command = 'claude', cwd, cols = 120, rows = 30, bypassPermissions = false, resumeSessionId = null, claudeUUID = null, verbose = false, model = null, agentTeams = false, shell: requestedShell = null, newSession = false } = {}) {
     // Return existing session if already alive
     const existing = this.sessions.get(sessionId);
     if (existing && existing.alive) {
       return existing;
     }
+
+    // Prefer claudeUUID over resumeSessionId
+    const resolvedResumeId = claudeUUID || resumeSessionId;
 
     // ── Defense-in-depth: validate all user-controlled inputs ──
     // Primary validation happens at the API/WebSocket boundary (server.js, pty-server.js).
@@ -141,8 +144,8 @@ class PtySessionManager {
       console.error(`[PTY] Rejected unsafe command for session ${sessionId}: ${command}`);
       return null;
     }
-    if (resumeSessionId && !/^[a-zA-Z0-9_-]+$/.test(resumeSessionId)) {
-      console.error(`[PTY] Rejected unsafe resumeSessionId for session ${sessionId}: ${resumeSessionId}`);
+    if (resolvedResumeId && !/^[a-zA-Z0-9_-]+$/.test(resolvedResumeId)) {
+      console.error(`[PTY] Rejected unsafe resumeSessionId for session ${sessionId}: ${resolvedResumeId}`);
       return null;
     }
     if (model && !/^[a-zA-Z0-9._:-]+$/.test(model)) {
@@ -152,8 +155,8 @@ class PtySessionManager {
 
     // Build full command string (all inputs validated above)
     let fullCommand = command;
-    if (resumeSessionId) {
-      fullCommand += ' --resume ' + resumeSessionId;
+    if (resolvedResumeId) {
+      fullCommand += ' --resume ' + resolvedResumeId;
     } else if (cwd && !newSession) {
       // No explicit session to resume - use --continue to pick up most recent
       // conversation in this working directory. On a fresh dir with no history,
@@ -177,7 +180,7 @@ class PtySessionManager {
     let resolvedCwd = cwd || process.cwd();
     const cwdIsValid = (p) => { try { return fs.existsSync(p) && fs.statSync(p).isDirectory(); } catch (_) { return false; } };
     if (!cwdIsValid(resolvedCwd)) {
-      const resumeId = resumeSessionId || sessionId;
+      const resumeId = resolvedResumeId || sessionId;
       const jsonlCwd = cwdFromJsonl(resumeId);
       if (jsonlCwd && cwdIsValid(jsonlCwd)) {
         console.log(`[PTY] cwd "${resolvedCwd}" invalid, resolved from JSONL: ${jsonlCwd}`);
@@ -396,7 +399,7 @@ class PtySessionManager {
     // Claude creates ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl on first prompt.
     // After /clear it creates a NEW .jsonl — we poll every 30s to pick up the change.
     if (resolvedCwd) {
-      let trackedUUID = resumeSessionId || null;
+      let trackedUUID = resolvedResumeId || null;
       let trackedMtime = 0;
 
       // Helper: find the project dir and return newest JSONL info
@@ -447,33 +450,16 @@ class PtySessionManager {
           const store = getStore();
           const storeSession = store.getSession(sessionId);
 
-          if (!oldUUID) {
-            // ── First UUID detection ──
-            if (storeSession) {
-              store.updateSession(sessionId, { resumeSessionId: newUUID });
-              if (storeSession.nameIsCustom && storeSession.name) {
-                // Carry manual name to the UUID registry
-                store.setSessionName(newUUID, storeSession.name, 'manual');
-                displayName = storeSession.name;
-                console.log(`[PTY] Carried manual name "${storeSession.name}" to first UUID ${newUUID}`);
-              } else {
-                // Use UUID itself as the auto-name
-                store.setSessionName(newUUID, newUUID, 'auto');
-                console.log(`[PTY] Registered first UUID ${newUUID} with auto-name (UUID)`);
-              }
-            } else {
-              // No store session (e.g. "New Session Here" pane) — still register the UUID
-              store.setSessionName(newUUID, newUUID, 'auto');
-              console.log(`[PTY] Registered first UUID ${newUUID} (no store session)`);
-            }
+          if (storeSession) {
+            // setClaudeUUID handles: index update, history, name reset, backward compat, save
+            store.setClaudeUUID(sessionId, newUUID);
+            // Read back display name for WS notification
+            const updated = store.getSession(sessionId);
+            displayName = updated.displayName || updated.name || newUUID;
           } else {
-            // ── After /clear — always start fresh ──
-            if (storeSession) {
-              store.updateSession(sessionId, { resumeSessionId: newUUID, name: '' });
-            }
-            // New UUID gets the UUID itself as its auto-name; never carry old name
+            // No managed session (e.g. "New Session Here" pane) — Phase 4 cleanup
             store.setSessionName(newUUID, newUUID, 'auto');
-            console.log(`[PTY] Post-/clear: registered new UUID ${newUUID} (was ${oldUUID})`);
+            console.log(`[PTY] Registered UUID ${newUUID} (no store session)`);
           }
           storeWriteSucceeded = true;
         } catch (_) {}
@@ -532,7 +518,7 @@ class PtySessionManager {
         const store = getStore();
         const storeSession = store.getSession(sessionId);
         if (storeSession) {
-          console.log(`[PTY] Spawning from store data for ${sessionId}: resumeSessionId=${storeSession.resumeSessionId}, cwd=${storeSession.workingDir}, cmd=${storeSession.command}`);
+          console.log(`[PTY] Spawning from store data for ${sessionId}: claudeUUID=${storeSession.claudeUUID || storeSession.resumeSessionId}, cwd=${storeSession.workingDir}, cmd=${storeSession.command}`);
           session = this.spawnSession(sessionId, {
             command: storeSession.command || 'claude',
             cwd: storeSession.workingDir || undefined,
@@ -540,7 +526,7 @@ class PtySessionManager {
             verbose: storeSession.verbose || false,
             model: storeSession.model || null,
             agentTeams: storeSession.agentTeams || false,
-            resumeSessionId: storeSession.resumeSessionId || null,
+            resumeSessionId: storeSession.claudeUUID || storeSession.resumeSessionId || null,
             ...spawnOpts,
           });
         } else {
