@@ -11550,20 +11550,23 @@ class CWMApp {
     });
 
     // Count session hook states (source of truth from server)
+    // For the active group, panes are in this.terminalPanes; for cached groups, in _groupPaneCache
     let runningCount = 0;
     let idleCount = 0;
     let totalCount = 0;
 
     if (g.panes) {
+      const cached = (!isActive && this._groupPaneCache[g.id]) ? this._groupPaneCache[g.id] : null;
       for (const p of g.panes) {
-        const tp = this.terminalPanes[p.slot];
-        if (tp && tp.sessionId) {
+        const tp = isActive ? this.terminalPanes[p.slot] : (cached ? cached.panes[p.slot] : null);
+        const sessionId = tp ? tp.sessionId : p.sessionId;
+        if (sessionId) {
           totalCount++;
-          const session = (this.state.allSessions || this.state.sessions || []).find(s => s.id === tp.sessionId);
+          const session = (this.state.allSessions || this.state.sessions || []).find(s => s.id === sessionId);
           if (session) {
             // hookState: 'active' | 'awaiting_input' | 'idle' | 'stopped' | 'error'
-            if (session.hookState === 'active' || session.hookState === 'awaiting_input') runningCount++;
-            else if (session.hookState === 'idle') idleCount++;
+            if (session.hookState === 'active') runningCount++;
+            else if (session.hookState === 'awaiting_input' || session.hookState === 'idle') idleCount++;
           }
         }
       }
