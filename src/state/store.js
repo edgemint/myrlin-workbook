@@ -590,17 +590,17 @@ class Store extends EventEmitter {
       updates.displayName = updates.name;
     }
 
-    // Sync resumeSessionId ↔ claudeUUID and update reverse index when UUID changes
-    if (updates.claudeUUID !== undefined && updates.resumeSessionId === undefined) {
-      updates.resumeSessionId = updates.claudeUUID;
-    } else if (updates.resumeSessionId !== undefined && updates.claudeUUID === undefined) {
-      updates.claudeUUID = updates.resumeSessionId;
-    }
-    // Update the reverse index if the UUID is changing
-    const newUUID = updates.claudeUUID;
-    if (newUUID !== undefined && newUUID !== session.claudeUUID) {
-      if (session.claudeUUID) this._claudeUUIDIndex.delete(session.claudeUUID);
-      if (newUUID) this._claudeUUIDIndex.set(newUUID, id);
+    // Delegate UUID changes to setClaudeUUID for atomic history/index/event handling
+    const incomingUUID = updates.claudeUUID || updates.resumeSessionId;
+    if (incomingUUID !== undefined && incomingUUID !== session.claudeUUID) {
+      this.setClaudeUUID(id, incomingUUID);
+      // setClaudeUUID already synced both fields and saved — remove from updates to avoid double-write
+      delete updates.claudeUUID;
+      delete updates.resumeSessionId;
+    } else if (incomingUUID !== undefined) {
+      // Same UUID, just sync the fields
+      updates.claudeUUID = incomingUUID;
+      updates.resumeSessionId = incomingUUID;
     }
 
     Object.assign(session, updates, { lastActive: new Date().toISOString() });
@@ -621,6 +621,10 @@ class Store extends EventEmitter {
     const ws = this._state.workspaces[session.workspaceId];
     if (ws) {
       ws.sessions = ws.sessions.filter(sid => sid !== id);
+    }
+    // Clean up claudeUUIDIndex
+    if (session.claudeUUID) {
+      this._claudeUUIDIndex.delete(session.claudeUUID);
     }
     delete this._state.sessions[id];
     this.save(); // Immediate save - deletion is critical
