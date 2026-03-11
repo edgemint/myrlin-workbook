@@ -120,8 +120,6 @@ class CWMApp {
       showHidden: false,
       resourceData: null,
       gitStatusCache: {},
-      sessionNames: {},
-      sessionNameSources: {},
       settings: Object.assign({
         paneColorHighlights: true,
         activityIndicators: true,
@@ -1435,7 +1433,7 @@ class CWMApp {
             if (session.verbose) spawnOpts.verbose = true;
             if (session.model) spawnOpts.model = session.model;
             if (session.agentTeams) spawnOpts.agentTeams = true;
-            this.openTerminalInPane(emptySlot, sessionId, session.name, spawnOpts);
+            this.openTerminalInPane(emptySlot, sessionId, session.displayName || session.name, spawnOpts);
           } else {
             this.showToast('All terminal panes are full. Close one first.', 'warning');
           }
@@ -1831,7 +1829,7 @@ class CWMApp {
           if (emptySlot !== -1) {
             try {
               const session = await this.ensureSessionRegistered(sessName, sessName, projectPath);
-              this.openTerminalInPane(emptySlot, session.id, session.name, {
+              this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
                 cwd: projectPath,
                 resumeSessionId: sessName,
                 command: 'claude',
@@ -2176,7 +2174,6 @@ class CWMApp {
       this.loadGroups(),
       this.loadProjects(),
       this.loadProjectDefaults(),
-      this.loadSessionNames(),
     ]);
 
     // Restore active workspace from localStorage if still valid
@@ -2188,71 +2185,13 @@ class CWMApp {
       }
     }
 
-    // Re-render projects now that sessionNames is guaranteed to be loaded.
-    // loadProjects() may have called renderProjects() earlier (e.g. from sessionStorage
-    // cache, synchronously) before loadSessionNames() had a chance to finish — re-render
-    // here ensures friendly names are shown instead of raw UUIDs.
+    // Re-render projects now that all data is loaded.
     this.renderProjects();
 
     await this.loadSessions();
 
     // Apply settings (CSS classes, visibility) after initial data is loaded
     this.applySettings();
-  }
-
-  /**
-   * Load the server-persisted claudeUUID→name map into this.state.sessionNames.
-   * Falls back to empty object on any error.
-   */
-  /**
-   * Load the server-persisted claudeUUID→name map into this.state.sessionNames.
-   * On first boot, migrates any titles stored in the legacy localStorage key
-   * (cwm_projectSessionTitles) to the server, then removes the localStorage entry.
-   */
-  async loadSessionNames() {
-    try {
-      const data = await this.api('GET', '/api/session-names');
-      if (data && typeof data === 'object') {
-        this.state.sessionNames = (data.names && typeof data.names === 'object') ? data.names : (data.names === undefined ? data : {});
-        this.state.sessionNameSources = (data.sources && typeof data.sources === 'object') ? data.sources : {};
-      } else {
-        this.state.sessionNames = {};
-        this.state.sessionNameSources = {};
-      }
-    } catch (_) {
-      this.state.sessionNames = {};
-      this.state.sessionNameSources = {};
-    }
-
-    // ── One-time migration from legacy localStorage key ──
-    const legacyRaw = localStorage.getItem('cwm_projectSessionTitles');
-    if (!legacyRaw) return; // Nothing to migrate
-
-    let legacy = {};
-    try { legacy = JSON.parse(legacyRaw); } catch (_) { /* corrupt — skip */ }
-
-    const serverMap = this.state.sessionNames;
-    const migrations = Object.entries(legacy)
-      .filter(([uuid, name]) => uuid && name && !serverMap[uuid]);
-
-    let migratedCount = 0;
-    if (migrations.length > 0) {
-      // Fire migrations in parallel — tolerate individual failures
-      await Promise.allSettled(
-        migrations.map(async ([uuid, name]) => {
-          try {
-            await this.api('PUT', `/api/session-names/${encodeURIComponent(uuid)}`, { name });
-            serverMap[uuid] = name; // Update local map immediately
-            migratedCount++;
-          } catch (_) {
-            // Silently skip failed entries — they'll appear nameless until re-titled
-          }
-        })
-      );
-    }
-
-    localStorage.removeItem('cwm_projectSessionTitles');
-    console.log(`[CWM] Migrated ${migratedCount}/${migrations.length} session name(s) from localStorage to server.`);
   }
 
   async loadWorkspaces() {}
@@ -2433,7 +2372,7 @@ class CWMApp {
     if (session && (!session.status || session.status === 'stopped')) {
       const confirmed = await this.showConfirmModal({
         title: 'Start Session?',
-        message: `<strong>${session.name ? this.escapeHtml(session.name) : 'This session'}</strong> is not running. Would you like to start it?`,
+        message: `<strong>${(session.displayName || session.name) ? this.escapeHtml(session.displayName || session.name) : 'This session'}</strong> is not running. Would you like to start it?`,
         confirmText: 'Start',
         confirmClass: 'btn-primary',
       });
@@ -2531,7 +2470,7 @@ class CWMApp {
     try {
       const data = await this.api('POST', '/api/sessions', result);
       const session = data.session || data;
-      this.showToast(`Session "${session.name || 'New'}" created`, 'success');
+      this.showToast(`Session "${session.displayName || session.name || 'New'}" created`, 'success');
       await this.loadSessions();
       await this.loadStats();
     } catch (err) {
@@ -2543,7 +2482,7 @@ class CWMApp {
     const result = await this.showPromptModal({
       title: 'Save as Template',
       fields: [
-        { key: 'name', label: 'Template Name', placeholder: session.name || 'My Template', required: true, value: session.name || '' },
+        { key: 'name', label: 'Template Name', placeholder: session.displayName || session.name || 'My Template', required: true, value: session.displayName || session.name || '' },
       ],
       confirmText: 'Save',
       confirmClass: 'btn-primary',
@@ -2589,7 +2528,7 @@ class CWMApp {
         this.setViewMode('terminal');
         const spawnOpts = { cwd: dir, newSession: true };
         if (flags.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-        this.openTerminalInPane(emptySlot, session.id, session.name, spawnOpts);
+        this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, spawnOpts);
       }
     } catch (err) {
       this.showToast(err.message || 'Failed to create session', 'error');
@@ -2605,7 +2544,7 @@ class CWMApp {
     const resultPromise = this.showPromptModal({
       title: 'Edit Session',
       fields: [
-        { key: 'name', label: 'Name', value: session.name, required: true },
+        { key: 'name', label: 'Name', value: session.displayName || session.name, required: true },
         { key: 'topic', label: 'Topic', value: session.topic || '' },
         { key: 'workingDir', label: 'Working Directory', value: session.workingDir || '' },
       ],
@@ -2664,7 +2603,7 @@ class CWMApp {
     }
     this.renderWorkspaces();
     this.renderSessions();
-    this.showToast(`Hidden "${session.name}" - toggle "Show hidden" to see it again`, 'info');
+    this.showToast(`Hidden "${session.displayName || session.name}" - toggle "Show hidden" to see it again`, 'info');
   }
 
   unhideSession(id) {
@@ -2687,7 +2626,7 @@ class CWMApp {
       if (allSession && allSession !== session) allSession.workspaceId = targetWorkspaceId;
       this.renderWorkspaces();
       this.renderSessions();
-      this.showToast(`Moved "${session.name || 'untitled'}" to "${targetWs.name}"`, 'success');
+      this.showToast(`Moved "${session.displayName || session.name || 'untitled'}" to "${targetWs.name}"`, 'success');
     } catch (err) {
       this.showToast('Failed to move session: ' + (err.message || ''), 'error');
     }
@@ -2724,7 +2663,7 @@ class CWMApp {
 
     const confirmed = await this.showConfirmModal({
       title: 'Remove Session',
-      message: `Remove "${session.name}" from this project? This deletes the session record (your Claude conversation files are not affected).`,
+      message: `Remove "${session.displayName || session.name}" from this project? This deletes the session record (your Claude conversation files are not affected).`,
       confirmText: 'Remove',
       confirmClass: 'btn-danger',
     });
@@ -2741,7 +2680,7 @@ class CWMApp {
       }
       this.renderWorkspaces();
       this.renderSessions();
-      this.showToast(`Removed "${session.name}"`, 'success');
+      this.showToast(`Removed "${session.displayName || session.name}"`, 'success');
     } catch (err) {
       this.showToast('Failed to remove session: ' + (err.message || ''), 'error');
     }
@@ -3003,7 +2942,7 @@ class CWMApp {
           if (session.verbose) spawnOpts.verbose = true;
           if (session.model) spawnOpts.model = session.model;
           if (session.agentTeams) spawnOpts.agentTeams = true;
-          this.openTerminalInPane(emptySlot, sessionId, session.name, spawnOpts);
+          this.openTerminalInPane(emptySlot, sessionId, session.displayName || session.name, spawnOpts);
         } else {
           this.showToast('All terminal panes full. Close one first.', 'warning');
         }
@@ -3024,7 +2963,7 @@ class CWMApp {
             if (session.verbose) spawnOpts.verbose = true;
             if (session.model) spawnOpts.model = session.model;
             if (session.agentTeams) spawnOpts.agentTeams = true;
-            this.openTerminalInPane(emptySlot, sessionId, session.name, spawnOpts);
+            this.openTerminalInPane(emptySlot, sessionId, session.displayName || session.name, spawnOpts);
           } else {
             this.showToast('All terminal panes full. Close one first.', 'warning');
           }
@@ -3038,7 +2977,7 @@ class CWMApp {
     const sessionItems = this._buildSessionContextItems(sessionId);
     if (sessionItems) items.push(...sessionItems);
 
-    this._renderContextItems(session.name, items, x, y);
+    this._renderContextItems(session.displayName || session.name, items, x, y);
   }
 
   hideContextMenu() {
@@ -3115,7 +3054,7 @@ class CWMApp {
         }
         try {
           const session = await this.ensureSessionRegistered(sessionName, sessionName, projectPath);
-          this.openTerminalInPane(emptySlot, session.id, session.name, {
+          this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
             cwd: projectPath,
             resumeSessionId: sessionName,
             command: 'claude',
@@ -3143,7 +3082,7 @@ class CWMApp {
           }
           try {
             const session = await this.ensureSessionRegistered(sessionName, sessionName, projectPath);
-            this.openTerminalInPane(emptySlot, session.id, session.name, {
+            this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
               cwd: projectPath,
               resumeSessionId: sessionName,
               command: 'claude',
@@ -3590,12 +3529,18 @@ class CWMApp {
   }
 
   /**
-   * Get a stored project session title (from localStorage), or null.
-   * Also checks workspace sessions that link to this Claude session UUID.
+   * Get the display name for a Claude session UUID by searching session objects.
+   * Returns displayName from matching session, or null if not found.
    */
   getProjectSessionTitle(claudeSessionId) {
-    if (this.state.sessionNames && this.state.sessionNames[claudeSessionId]) {
-      return this.state.sessionNames[claudeSessionId];
+    const all = this.state.allSessions || this.state.sessions || [];
+    const match = all.find(s => s.resumeSessionId === claudeSessionId || s.id === claudeSessionId);
+    if (match && match.displayName) return match.displayName;
+    // Also search project session objects
+    for (const p of (this.state.projects || [])) {
+      for (const s of (p.sessions || [])) {
+        if (s.name === claudeSessionId && s.displayName) return s.displayName;
+      }
     }
     return null;
   }
@@ -3606,7 +3551,15 @@ class CWMApp {
    * @returns {'auto' | 'manual' | null}
    */
   getSessionNameSource(claudeSessionId) {
-    return (this.state.sessionNameSources && this.state.sessionNameSources[claudeSessionId]) || null;
+    const all = this.state.allSessions || this.state.sessions || [];
+    const match = all.find(s => s.resumeSessionId === claudeSessionId || s.id === claudeSessionId);
+    if (match) return match.nameSource || null;
+    for (const p of (this.state.projects || [])) {
+      for (const s of (p.sessions || [])) {
+        if (s.name === claudeSessionId) return s.nameSource || null;
+      }
+    }
+    return null;
   }
 
   /**
@@ -3624,7 +3577,7 @@ class CWMApp {
   }
 
   /**
-   * Persist a session display name to the server and update the local map.
+   * Persist a session display name to the server and update the local session object.
    * Single source of truth — no localStorage writes, no fire-and-forget loops.
    * @param {string} claudeSessionId - Claude UUID
    * @param {string} title - Display name to store
@@ -3633,14 +3586,20 @@ class CWMApp {
     if (!claudeSessionId || !title || typeof title !== 'string' || title.trim() === '') return;
     const trimmed = title.trim();
     try {
-      await this.api('PUT', `/api/session-names/${encodeURIComponent(claudeSessionId)}`, { name: trimmed, source });
-      // Update local maps immediately so callers see the change without reload
-      if (!this.state.sessionNames) this.state.sessionNames = {};
-      if (!this.state.sessionNameSources) this.state.sessionNameSources = {};
-      // Mirror server-side guard: auto cannot overwrite manual locally either
-      if (source === 'auto' && this.state.sessionNameSources[claudeSessionId] === 'manual') return;
-      this.state.sessionNames[claudeSessionId] = trimmed;
-      this.state.sessionNameSources[claudeSessionId] = source;
+      // Find the managed session that owns this Claude UUID
+      const all = this.state.allSessions || this.state.sessions || [];
+      const session = all.find(s => s.resumeSessionId === claudeSessionId || s.id === claudeSessionId);
+      if (session) {
+        // Mirror server-side guard: auto cannot overwrite manual locally
+        if (source === 'auto' && session.nameSource === 'manual') return;
+        await this.api('PUT', `/api/sessions/${session.id}`, { displayName: trimmed, nameSource: source });
+        // Update local session object immediately so callers see the change without reload
+        session.displayName = trimmed;
+        session.nameSource = source;
+      } else {
+        // Session not yet in allSessions (e.g. discovered project session) — fall back to legacy endpoint
+        await this.api('PUT', `/api/session-names/${encodeURIComponent(claudeSessionId)}`, { name: trimmed, source });
+      }
     } catch (err) {
       // 409 means server rejected auto-assign due to manual name — not an error worth toasting
       if (err.status === 409 || (err.message || '').includes('409')) return;
@@ -5828,7 +5787,7 @@ class CWMApp {
 
     // Get session info for display
     const session = (this.state.allSessions || this.state.sessions).find(s => s.id === sessionId);
-    const sessionName = session ? session.name : sessionId;
+    const sessionName = session ? (session.displayName || session.name || sessionId) : sessionId;
 
     // Show dialog in loading state
     this.els.spinoffOverlay.hidden = false;
@@ -6039,7 +5998,7 @@ class CWMApp {
             if (item.session) {
               const emptySlot = this.terminalPanes.findIndex(p => p === null);
               if (emptySlot !== -1) {
-                this.openTerminalInPane(emptySlot, item.session.id, item.task.branch || item.session.name, {
+                this.openTerminalInPane(emptySlot, item.session.id, item.task.branch || item.session.displayName || item.session.name, {
                   cwd: item.task.worktreePath,
                   ...(this.state.settings.defaultBypassPermissions ? { bypassPermissions: true } : {}),
                 });
@@ -8136,8 +8095,9 @@ class CWMApp {
     this.els.detailStatusDot.className = `detail-status-dot status-dot-${_detailStatus}`;
 
     // Title
-    if (session.name) {
-      this.els.detailTitle.textContent = session.name;
+    const _detailName = session.displayName || session.name;
+    if (_detailName) {
+      this.els.detailTitle.textContent = _detailName;
       this.els.detailTitle.classList.remove('session-name-empty');
     } else {
       this.els.detailTitle.textContent = '';
@@ -8754,7 +8714,7 @@ class CWMApp {
     try {
       const session = await this.ensureSessionRegistered(sessionId, sessionId, projectPath);
       this.setViewMode('terminal');
-      this.openTerminalInPane(emptySlot, session.id, session.name, {
+      this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, {
         cwd: projectPath,
         resumeSessionId: sessionId,
         command: 'claude',
@@ -8860,7 +8820,7 @@ class CWMApp {
               if (session.model) spawnOpts.model = session.model;
               if (session.agentTeams) spawnOpts.agentTeams = true;
             }
-            this.openTerminalInPane(slotIdx, sessionId, session ? session.name : 'Terminal', spawnOpts);
+            this.openTerminalInPane(slotIdx, sessionId, session ? (session.displayName || session.name) : 'Terminal', spawnOpts);
             return;
           }
 
@@ -8879,7 +8839,7 @@ class CWMApp {
               }
               console.log('[DnD] Project-session drop - resumeSessionId:', claudeSessionId, 'cwd:', ps.projectPath);
               const session = await this.ensureSessionRegistered(claudeSessionId, claudeSessionId, ps.projectPath);
-              this.openTerminalInPane(slotIdx, session.id, session.name, {
+              this.openTerminalInPane(slotIdx, session.id, session.displayName || session.name, {
                 cwd: ps.projectPath,
                 resumeSessionId: claudeSessionId,
                 command: 'claude',
@@ -8909,7 +8869,7 @@ class CWMApp {
               await this.loadSessions();
               const spawnOpts = { cwd: project.path, command: 'claude', newSession: true };
               if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-              this.openTerminalInPane(slotIdx, session.id, session.name, spawnOpts);
+              this.openTerminalInPane(slotIdx, session.id, session.displayName || session.name, spawnOpts);
               this.showToast('Opening project', 'info');
             } catch (err) {
               this.showToast(err.message || 'Failed to open project', 'error');
@@ -12038,7 +11998,7 @@ class CWMApp {
       if (session.flags) spawnOpts.flags = session.flags;
       if (session.model) spawnOpts.model = session.model;
       if (session.bypassPermissions || this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
-      this.openTerminalInPane(i, session.id, session.name || session.id, spawnOpts);
+      this.openTerminalInPane(i, session.id, session.displayName || session.name || session.id, spawnOpts);
     }
 
     this.renderTerminalGroupTabs();
@@ -12670,7 +12630,7 @@ class CWMApp {
       const sizeKB = data.fileSize ? Math.round(data.fileSize / 1024) : '?';
       return `<div class="ai-insight-card">
         <div class="ai-insight-header">
-          <span class="ai-insight-name">${this.escapeHtml(session.name)}</span>
+          <span class="ai-insight-name">${this.escapeHtml(session.displayName || session.name)}</span>
           <span class="ai-insight-badge">${sizeKB}KB / ${data.messageCount || '?'} msgs</span>
         </div>
         <div class="ai-insight-theme"><strong>Theme:</strong> ${this.escapeHtml(data.overallTheme || 'Unknown')}</div>
@@ -14593,7 +14553,7 @@ class CWMApp {
               workspaceId: session.workspaceId,
               workingDir: session.workingDir || '',
               command: 'claude',
-              topic: `Continued from: ${session.name || session.id}`,
+              topic: `Continued from: ${session.displayName || session.name || session.id}`,
             };
             if (session.model) payload.model = session.model;
             if (session.bypassPermissions) payload.bypassPermissions = true;
@@ -15701,7 +15661,7 @@ class CWMApp {
     if (session.agentTeams) spawnOpts.agentTeams = true;
 
     this.setViewMode('terminal');
-    this.openTerminalInPane(emptySlot, session.id, session.name, spawnOpts);
+    this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, spawnOpts);
     this.closeSessionManager();
   }
 
@@ -16083,7 +16043,7 @@ class CWMApp {
       const data = await this.api('POST', '/api/sessions', payload);
       const session = data.session || data;
 
-      this.showToast(`Session "${session.name}" created`, 'success');
+      this.showToast(`Session "${session.displayName || session.name}" created`, 'success');
       await this.loadSessions();
       await this.loadStats();
 
@@ -16094,7 +16054,7 @@ class CWMApp {
         if (model) spawnOpts.model = model;
         if (this.state.settings.defaultBypassPermissions) spawnOpts.bypassPermissions = true;
         this.setViewMode('terminal');
-        this.openTerminalInPane(emptySlot, session.id, session.name, spawnOpts);
+        this.openTerminalInPane(emptySlot, session.id, session.displayName || session.name, spawnOpts);
       } else {
         this.showToast('All terminal panes full. Close one first.', 'warning');
       }
