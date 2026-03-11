@@ -4919,12 +4919,28 @@ html.activity-indicators-disabled .terminal-pane-activity {
   background: var(--surface2);
 }
 
+.terminal-group-tab-count-group {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
 .terminal-group-tab-count {
   font-size: 10px;
   color: var(--overlay0);
   background: var(--surface1);
   padding: 0 4px;
   border-radius: 6px;
+}
+
+.terminal-group-tab-count.running {
+  background: var(--green);
+  color: var(--base);
+}
+
+.terminal-group-tab-count.idle {
+  background: var(--red);
+  color: var(--base);
 }
 
 .terminal-group-tab-close {

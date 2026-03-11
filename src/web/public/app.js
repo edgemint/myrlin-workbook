@@ -11511,15 +11511,47 @@ class CWMApp {
    */
   _renderTabButtonHtml(g) {
     const isActive = g.id === this._activeGroupId;
-    const paneCount = g.panes ? g.panes.length : 0;
     const hasActive = g.panes && g.panes.some(p => {
       const tp = this.terminalPanes.find((_, i) => p.slot === i);
       return tp !== null;
     });
+
+    // Count session statuses
+    let runningCount = 0;
+    let idleCount = 0;
+    let totalCount = 0;
+
+    if (g.panes) {
+      for (const p of g.panes) {
+        const tp = this.terminalPanes[p.slot];
+        if (tp && tp.sessionId) {
+          totalCount++;
+          const session = (this.state.allSessions || this.state.sessions || []).find(s => s.id === tp.sessionId);
+          if (session) {
+            if (session.status === 'running') runningCount++;
+            else if (session.status === 'idle') idleCount++;
+          }
+        }
+      }
+    }
+
+    // Build status badges
+    let countHtml = '';
+    if (totalCount > 0) {
+      const runningClass = runningCount > 0 ? ' running' : '';
+      const idleClass = idleCount > 0 ? ' idle' : '';
+
+      countHtml += `<span class="terminal-group-tab-count-group">`;
+      if (runningCount > 0) countHtml += `<span class="terminal-group-tab-count${runningClass}">R${runningCount}</span>`;
+      if (idleCount > 0) countHtml += `<span class="terminal-group-tab-count${idleClass}">I${idleCount}</span>`;
+      countHtml += `<span class="terminal-group-tab-count">T${totalCount}</span>`;
+      countHtml += `</span>`;
+    }
+
     return `<button class="terminal-group-tab${isActive ? ' active' : ''}" data-group-id="${g.id}">
       <span class="terminal-group-tab-dot${hasActive ? '' : ' inactive'}"></span>
       <span class="terminal-group-tab-name">${this.escapeHtml(g.name)}</span>
-      ${paneCount > 0 ? `<span class="terminal-group-tab-count">${paneCount}</span>` : ''}
+      ${countHtml}
       <span class="terminal-group-tab-close" data-group-id="${g.id}" title="Close tab">&times;</span>
     </button>`;
   }
