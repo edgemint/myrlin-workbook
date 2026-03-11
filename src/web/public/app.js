@@ -162,9 +162,6 @@ class CWMApp {
     // Cache of TerminalPane instances per group to avoid reconnection on tab switch.
     // Key: groupId, Value: { panes: [TerminalPane|null x MAX_PANES], domFragments: [DocumentFragment|null x MAX_PANES] }
     this._groupPaneCache = {};
-    // Map Claude session UUID -> {groupId, slotIdx} for fast notification lookups
-    // Persists across tab switches, survives DOM changes, always up-to-date
-    this._sessionLocationMap = new Map();
     this.PANE_SLOT_COLORS = ['mauve', 'blue', 'green', 'peach', 'red', 'pink'];
     this._gridColSizes = [1, 1];  // fr ratios for column widths
     this._gridRowSizes = [1, 1];  // fr ratios for row heights
@@ -7703,8 +7700,7 @@ class CWMApp {
         this._markNotificationRead(id);
         const sid = el.dataset.sessionId;
         if (sid) {
-          // Look up pane location in the session map
-          const paneLocation = this._sessionLocationMap.get(sid);
+          const paneLocation = this._findPaneBySessionId(sid);
           if (paneLocation) {
             if (paneLocation.groupId !== this._activeGroupId) {
               this._suppressFocusin = true;
@@ -7809,32 +7805,6 @@ class CWMApp {
             session.hookState = data.data.hookState;
           }
         }
-        // Stamp claudeSessionId on the terminal pane DOM — hooks fire immediately
-        // Map Claude session UUID to its location for fast notification lookups.
-        // Fires within ms of session start, before PTY's 8-second UUID detection.
-        if (data.data && data.data.claudeSessionId && data.data.sessionId) {
-          const cid = data.data.claudeSessionId;
-          const mid = data.data.sessionId;
-          // Search active group panes
-          for (let i = 0; i < this.terminalPanes.length; i++) {
-            const tp = this.terminalPanes[i];
-            if (tp && tp.sessionId === mid) {
-              tp.claudeSessionId = cid;
-              this._sessionLocationMap.set(cid, {groupId: this._activeGroupId, slotIdx: i});
-              break;
-            }
-          }
-          // Search cached (non-active) group panes
-          for (const [groupId, cached] of Object.entries(this._groupPaneCache || {})) {
-            for (let i = 0; i < (cached.panes || []).length; i++) {
-              if (cached.panes[i] && cached.panes[i].sessionId === mid) {
-                cached.panes[i].claudeSessionId = cid;
-                this._sessionLocationMap.set(cid, {groupId, slotIdx: i});
-                break;
-              }
-            }
-          }
-        }
         // Re-render session list to show new state badge
         this.loadSessions().then(() => { if (this._smOpen) this.renderSessionManager(); });
         break;
@@ -7846,10 +7816,8 @@ class CWMApp {
         const wsName = d.workspaceName ? ` (${d.workspaceName})` : '';
         const msg = d.message || 'needs attention';
 
-        // Use claudeSessionId for navigation — it's the reliable Claude UUID that
-        // maps to a specific pane location. The managed d.sessionId can be wrong when
-        // _findSession resolves by CWD and multiple sessions share the same directory.
-        const navId = d.claudeSessionId || d.sessionId || null;
+        // Use stable local sessionId for navigation — always present and reliable
+        const navId = d.sessionId || null;
 
         // Push to notification center
         const notifId = this._pushNotification(`${name}${wsName}: ${msg}`, 'info', navId);
@@ -7857,23 +7825,7 @@ class CWMApp {
         // In-app toast with action button to navigate to the session
         if (navId) {
           const toast = this.showActionToast(`${name}${wsName}: ${msg}`, 'info', 'Go to session', () => {
-            // Look up pane location in the session map (persists across tab switches)
-            const paneLocation = this._sessionLocationMap.get(navId);
-
-            // DEBUG: Log the lookup attempt
-            console.log('[NAV] Go to session clicked for:', navId);
-            console.log('[NAV] Map lookup result:', paneLocation);
-            console.log('[NAV] Full session location map:', Array.from(this._sessionLocationMap.entries()));
-            console.log('[NAV] All tab groups:', this._tabGroups.map(g => ({
-              id: g.id,
-              name: g.name,
-              panes: (g.panes || []).map(p => ({slot: p.slot, sessionId: p.sessionId, name: p.sessionName}))
-            })));
-            console.log('[NAV] Active group panes:', this.terminalPanes.map((tp, i) => tp ? {slot: i, sessionId: tp.sessionId, claudeId: tp.claudeSessionId, name: tp.sessionName} : null).filter(Boolean));
-            console.log('[NAV] Cached groups:', Object.entries(this._groupPaneCache || {}).map(([gid, cached]) => ({
-              groupId: gid,
-              panes: (cached.panes || []).map((tp, i) => tp ? {slot: i, sessionId: tp.sessionId, claudeId: tp.claudeSessionId} : null).filter(Boolean)
-            })));
+            const paneLocation = this._findPaneBySessionId(navId);
 
             this._showDebugPanel(navId, paneLocation);
 
@@ -9172,12 +9124,6 @@ class CWMApp {
     const tp = new TerminalPane(containerId, sessionId, sessionName, spawnOpts);
     this.terminalPanes[slotIdx] = tp;
 
-    // If this pane already has a Claude UUID (e.g., from restore or move),
-    // update location map immediately. Critical for sessions moved between groups.
-    if (tp.claudeSessionId) {
-      this._sessionLocationMap.set(tp.claudeSessionId, {groupId: this._activeGroupId, slotIdx});
-    }
-
     // Wire up mobile mode change callback to sync keyboard toggle button
     tp.onMobileModeChange = (mode) => {
       document.querySelectorAll('.toolbar-keyboard').forEach(kb => {
@@ -9222,8 +9168,6 @@ class CWMApp {
       tp.sessionName = snippet || uuid;
       tp.sessionNameIsAuto = isAutoName;
 
-      // Track location in map for notification lookups
-      this._sessionLocationMap.set(uuid, {groupId, slotIdx});
       // Update DOM title only if pane is in active group
       if (groupId === this._activeGroupId) {
         const paneEl = document.getElementById(`term-pane-${slotIdx}`);
@@ -9514,10 +9458,6 @@ class CWMApp {
     const sessionName = tp ? tp.sessionName : '';
 
     if (tp) {
-      // Remove from location map
-      if (tp.claudeSessionId) {
-        this._sessionLocationMap.delete(tp.claudeSessionId);
-      }
       // Dispose disconnects the WebSocket but the PTY keeps running in the background
       tp.dispose();
       this.terminalPanes[slotIdx] = null;
@@ -9744,19 +9684,29 @@ class CWMApp {
   }
 
   /**
-   * Rebuild location map entries for all terminals in a specific group.
-   * Call this after operations that move terminals (swap, restore) to ensure
-   * the map reflects current positions even if UUIDs were detected after the move.
+   * Find the pane location for a given stable session ID.
+   * Searches the active group and all cached groups.
+   * Returns { groupId, slotIdx } or null if not found.
+   * @param {string} sessionId - Stable local session ID (tp.sessionId)
    */
-  _refreshSessionLocationMapForGroup(groupId) {
-    const panes = groupId === this._activeGroupId ? this.terminalPanes : this._groupPaneCache[groupId]?.panes;
-    if (!panes) return;
-    for (let i = 0; i < panes.length; i++) {
-      const tp = panes[i];
-      if (tp && tp.claudeSessionId) {
-        this._sessionLocationMap.set(tp.claudeSessionId, {groupId, slotIdx: i});
+  _findPaneBySessionId(sessionId) {
+    if (!sessionId) return null;
+    // Check active group panes
+    for (let i = 0; i < this.terminalPanes.length; i++) {
+      const tp = this.terminalPanes[i];
+      if (tp && tp.sessionId === sessionId) {
+        return { groupId: this._activeGroupId, slotIdx: i };
       }
     }
+    // Check cached (non-active) group panes
+    for (const [groupId, cached] of Object.entries(this._groupPaneCache || {})) {
+      for (let i = 0; i < (cached.panes || []).length; i++) {
+        if (cached.panes[i] && cached.panes[i].sessionId === sessionId) {
+          return { groupId, slotIdx: i };
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -9793,17 +9743,6 @@ class CWMApp {
     // Swap in the array
     this.terminalPanes[srcSlot] = dstTp;
     this.terminalPanes[dstSlot] = srcTp;
-
-    // Update location map for swapped sessions
-    if (srcTp && srcTp.claudeSessionId) {
-      this._sessionLocationMap.set(srcTp.claudeSessionId, {groupId: this._activeGroupId, slotIdx: dstSlot});
-    }
-    if (dstTp && dstTp.claudeSessionId) {
-      this._sessionLocationMap.set(dstTp.claudeSessionId, {groupId: this._activeGroupId, slotIdx: srcSlot});
-    }
-    // Refresh the entire map for the active group to catch any UUIDs that were set
-    // after the swap (defensive: handles case where UUID detection completes after swap)
-    this._refreshSessionLocationMapForGroup(this._activeGroupId);
 
     // Update DOM for both panes
     [srcSlot, dstSlot].forEach(slot => {
@@ -10022,7 +9961,7 @@ class CWMApp {
       if (event.data && event.data.type === 'notification-click') {
         window.focus();
         if (event.data.sessionId) {
-          const paneLocation = this._sessionLocationMap.get(event.data.sessionId);
+          const paneLocation = this._findPaneBySessionId(event.data.sessionId);
           if (paneLocation) {
             if (paneLocation.groupId !== this._activeGroupId) {
               this.switchTerminalGroup(paneLocation.groupId);
@@ -10054,7 +9993,7 @@ class CWMApp {
       notif.onclick = () => {
         window.focus();
         if (sessionId) {
-          const paneLocation = this._sessionLocationMap.get(sessionId);
+          const paneLocation = this._findPaneBySessionId(sessionId);
           if (paneLocation) {
             if (paneLocation.groupId !== this._activeGroupId) {
               this.switchTerminalGroup(paneLocation.groupId);
@@ -10190,25 +10129,15 @@ class CWMApp {
   }
 
   /**
-   * Debug panel showing session location map and available panes.
+   * Debug panel showing pane locations and available panes.
    */
   _showDebugPanel(lookingForId, foundLocation) {
     // Skip if debug panel is disabled in settings
     if (!this.getSetting('debugNavigationPanel')) {
       // Log debug info to console instead
-      const mapEntries = Array.from(this._sessionLocationMap.entries());
       console.log('%c🔍 Session Navigation Debug (Panel OFF - Logging to Console)', 'color: #00ff41; font-weight: bold; font-size: 14px; background: #1a1a2e; padding: 5px 10px;');
       console.log(`%c🎯 LOOKING FOR: %c${lookingForId}`, 'color: #ffaa00', 'color: #ff4444; font-weight: bold');
-      console.log(`%c${foundLocation ? '✓ FOUND:' : '✗ NOT FOUND'} ${foundLocation ? `Group ${foundLocation.groupId}, Slot ${foundLocation.slotIdx}` : 'Not in map'}`, foundLocation ? 'color: #00ff41' : 'color: #ff4444');
-
-      console.log(`%c📍 Session Location Map (${mapEntries.length} entries):`, 'color: #ffaa00; font-weight: bold');
-      if (mapEntries.length === 0) {
-        console.log('%c⚠️ Map is empty!', 'color: #ff4444');
-      } else {
-        mapEntries.forEach(([id, loc]) => {
-          console.log(`  ${id.substring(0, 8)}... → Group: ${loc.groupId}, Slot: ${loc.slotIdx}`, id === lookingForId ? 'font-weight: bold; background: #ff444422' : '');
-        });
-      }
+      console.log(`%c${foundLocation ? '✓ FOUND:' : '✗ NOT FOUND'} ${foundLocation ? `Group ${foundLocation.groupId}, Slot ${foundLocation.slotIdx}` : 'Not in panes'}`, foundLocation ? 'color: #00ff41' : 'color: #ff4444');
 
       console.log('%c🏢 Tab Groups:', 'color: #ffaa00; font-weight: bold');
       (this._tabGroups || []).forEach(g => {
@@ -10221,14 +10150,12 @@ class CWMApp {
         if (!tp) {
           console.log(`  Slot ${i}: empty`);
         } else {
-          console.log(`  Slot ${i}: ${tp.sessionName || tp.sessionId.substring(0, 8)} | Claude: ${tp.claudeSessionId ? tp.claudeSessionId.substring(0, 8) + '...' : 'NOT SET'}`);
+          console.log(`  Slot ${i}: ${tp.sessionName || tp.sessionId.substring(0, 8)} | sessionId: ${tp.sessionId}`);
         }
       });
 
       return;
     }
-
-    const mapEntries = Array.from(this._sessionLocationMap.entries());
 
     let html = `
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000;
@@ -10243,18 +10170,7 @@ class CWMApp {
         <div style="margin-bottom: 15px;">
           <div style="color: #ffaa00; margin-bottom: 5px;">🎯 LOOKING FOR: <span style="color: #ff4444;">${lookingForId}</span></div>
           <div style="color: ${foundLocation ? '#00ff41' : '#ff4444'}; margin-bottom: 10px;">
-            ${foundLocation ? `✓ FOUND: Group <strong>${foundLocation.groupId}</strong>, Slot <strong>${foundLocation.slotIdx}</strong>` : '✗ NOT FOUND IN MAP'}
-          </div>
-        </div>
-
-        <div style="background: #0f0f1e; padding: 10px; border-left: 3px solid #00ff41; margin-bottom: 15px;">
-          <div style="color: #ffaa00; margin-bottom: 8px;">📍 Session Location Map (${mapEntries.length} entries):</div>
-          <div>
-            ${mapEntries.length === 0 ? '<span style="color: #ff4444;">⚠️ Map is empty!</span>' : mapEntries.map(([id, loc]) => `
-              <div style="margin: 5px 0; ${id === lookingForId ? 'background: #ff444422; padding: 5px;' : ''}">
-                <span style="color: #ffff00;">${id.substring(0, 8)}...</span> → Group: <strong>${loc.groupId}</strong>, Slot: <strong>${loc.slotIdx}</strong>
-              </div>
-            `).join('')}
+            ${foundLocation ? `✓ FOUND: Group <strong>${foundLocation.groupId}</strong>, Slot <strong>${foundLocation.slotIdx}</strong>` : '✗ NOT FOUND IN PANES'}
           </div>
         </div>
 
@@ -10275,7 +10191,7 @@ class CWMApp {
           <div style="color: #aaaaaa;">
             ${this.terminalPanes.map((tp, i) => {
               if (!tp) return `<div>Slot ${i}: <span style="color: #666;">empty</span></div>`;
-              return `<div>Slot ${i}: <strong>${tp.sessionName || tp.sessionId.substring(0, 8)}</strong> | Claude: ${tp.claudeSessionId ? tp.claudeSessionId.substring(0, 8) + '...' : '<span style="color: #ff4444;">NOT SET</span>'}</div>`;
+              return `<div>Slot ${i}: <strong>${tp.sessionName || tp.sessionId.substring(0, 8)}</strong> | sessionId: ${tp.sessionId}</div>`;
             }).join('')}
           </div>
         </div>
@@ -11990,11 +11906,6 @@ class CWMApp {
       for (let i = 0; i < CWMApp.MAX_PANES; i++) {
         if (cached.panes[i]) {
           this.terminalPanes[i] = cached.panes[i];
-          // Update location map: this pane is now in the newly active group
-          const tp = cached.panes[i];
-          if (tp.claudeSessionId) {
-            this._sessionLocationMap.set(tp.claudeSessionId, {groupId, slotIdx: i});
-          }
           const paneEl = document.getElementById(`term-pane-${i}`);
           if (paneEl) {
             // Explicitly unhide -- belt-and-suspenders with updateTerminalGridLayout()
