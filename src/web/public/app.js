@@ -7797,18 +7797,30 @@ class CWMApp {
         this.loadStats();
         break;
       case 'session:hook-state': {
-        // Update the session's hookState in local cache
-        if (data.data && data.data.sessionId) {
-          const sid = data.data.sessionId;
-          const sessions = this.state.sessions || [];
-          const session = sessions.find(s => s.id === sid);
-          if (session) {
-            session.hookState = data.data.hookState;
+        // Update the session's hookState in BOTH local caches (sessions + allSessions)
+        const hookData = data.data || {};
+        const newHookState = hookData.hookState;
+        if (newHookState) {
+          const sid = hookData.sessionId;
+          const claudeUUID = hookData.claudeSessionId;
+          for (const list of [this.state.sessions, this.state.allSessions]) {
+            if (!list) continue;
+            // Match by managed session ID first, then fall back to claudeUUID
+            const session = sid
+              ? list.find(s => s.id === sid)
+              : (claudeUUID ? list.find(s => s.claudeUUID === claudeUUID || s.resumeSessionId === claudeUUID) : null);
+            if (session) {
+              session.hookState = newHookState;
+            }
           }
         }
-        // Re-render session list and tabs to show updated state badges
-        this.loadSessions().then(() => { if (this._smOpen) this.renderSessionManager(); });
+        // Render tabs immediately with the just-updated local state
         this.renderTerminalGroupTabs();
+        // Then refresh from server and re-render tabs + session manager with authoritative data
+        this.loadSessions().then(() => {
+          this.renderTerminalGroupTabs();
+          if (this._smOpen) this.renderSessionManager();
+        });
         break;
       }
 
