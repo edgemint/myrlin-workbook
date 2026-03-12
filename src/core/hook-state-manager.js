@@ -57,15 +57,35 @@ class HookStateManager {
 
     const cwd = payload.cwd || null;
 
-    // Find the matching managed session
-    const session = this._findSession(claudeSessionId);
+    // Find the matching managed session by UUID index
+    let session = this._findSession(claudeSessionId);
 
-    // On session-start, register UUID if not yet indexed (race with PTY detection)
-    if (slug === 'session-start' && claudeSessionId) {
+    // If UUID isn't indexed yet (race with PTY detection), try to match by cwd
+    // and register the UUID so future events resolve instantly.
+    if (!session && cwd) {
       const store = getStore();
-      const existing = store.getSessionByClaudeUUID(claudeSessionId);
-      if (!existing && session) {
-        store.setClaudeUUID(session.id, claudeSessionId);
+      const allSessions = Object.values(store._state.sessions || {});
+      const path = require('path');
+      const normalizedCwd = cwd.replace(/[/\\]/g, path.sep).toLowerCase();
+      // Find running sessions with matching workingDir (prefer running over stopped)
+      const candidates = allSessions
+        .filter(s => s.workingDir && s.workingDir.replace(/[/\\]/g, path.sep).toLowerCase() === normalizedCwd)
+        .sort((a, b) => {
+          // Prefer sessions that don't already have a different claudeUUID indexed
+          const aHasUUID = a.claudeUUID && store.getSessionByClaudeUUID(a.claudeUUID);
+          const bHasUUID = b.claudeUUID && store.getSessionByClaudeUUID(b.claudeUUID);
+          if (aHasUUID && !bHasUUID) return 1;
+          if (!aHasUUID && bHasUUID) return -1;
+          // Then prefer running sessions
+          if (a.status === 'running' && b.status !== 'running') return -1;
+          if (b.status === 'running' && a.status !== 'running') return 1;
+          return new Date(b.lastActive || 0) - new Date(a.lastActive || 0);
+        });
+      if (candidates.length > 0) {
+        const match = candidates[0];
+        store.setClaudeUUID(match.id, claudeSessionId);
+        session = store.getSession(match.id);
+        console.log(`[HookState] Late-bound UUID ${claudeSessionId} to session ${match.id} via cwd match`);
       }
     }
 

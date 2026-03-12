@@ -2202,7 +2202,18 @@ class CWMApp {
 
       // Always fetch ALL sessions for sidebar workspace rendering
       const allData = await this.api('GET', '/api/sessions?mode=all');
-      this.state.allSessions = allData.sessions || [];
+      const freshAll = allData.sessions || [];
+      // Preserve locally-known hookState when server returns null (SSE updates
+      // arrive before the store persists, so the server can lag behind)
+      if (this.state.allSessions) {
+        const prevMap = new Map(this.state.allSessions.map(s => [s.id, s.hookState]));
+        for (const s of freshAll) {
+          if (!s.hookState && prevMap.has(s.id) && prevMap.get(s.id)) {
+            s.hookState = prevMap.get(s.id);
+          }
+        }
+      }
+      this.state.allSessions = freshAll;
 
       // If workspace mode but no workspace active, show empty
       if (mode === 'workspace' && !this.state.activeWorkspace) {
