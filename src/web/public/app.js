@@ -9922,6 +9922,10 @@ class CWMApp {
       : null;
     const qualifiedName = workspace ? `${workspace.name} -> ${name}` : name;
 
+    // Also respect the hookNotifications awaiting_input trigger toggle
+    const hn = (this.state.settings.hookNotifications || {});
+    if (hn.enabled === false || (hn.triggers && hn.triggers.awaiting_input === false)) return;
+
     // In-app notifications (gated by completionNotifications setting)
     if (this.getSetting('completionNotifications') && sessionIdx !== this._activeTerminalSlot) {
       // Push to notification center
