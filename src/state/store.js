@@ -64,6 +64,15 @@ class Store extends EventEmitter {
   }
 
   /**
+   * Check if a string looks like a UUID (any UUID, not just one we know about).
+   * Used to prevent UUIDs from leaking into display names.
+   */
+  static isUUID(str) {
+    return typeof str === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  }
+
+  /**
    * Initialize the store - load from disk or create default
    */
   init() {
@@ -76,7 +85,8 @@ class Store extends EventEmitter {
     this._state = this._load();
     const migrated = this._migrateState(this._state);
     this._buildClaudeUUIDIndex();
-    if (migrated) this.save();
+    const cleaned = this._cleanupUUIDNames();
+    if (migrated || cleaned) this.save();
     return this;
   }
 
@@ -238,6 +248,39 @@ class Store extends EventEmitter {
   }
 
   /**
+   * Startup cleanup: scrub any session displayName/name that looks like a UUID.
+   * Catches cases where a session accidentally got named with any UUID (its own or another's).
+   * @returns {boolean} true if any field was changed
+   */
+  _cleanupUUIDNames() {
+    let dirty = false;
+    for (const session of Object.values(this._state.sessions || {})) {
+      if (Store.isUUID(session.displayName)) {
+        console.log(`[Store] Cleanup: clearing UUID-based displayName "${session.displayName}" from session ${session.id}`);
+        session.displayName = '';
+        session.nameSource = 'auto';
+        dirty = true;
+      }
+      if (Store.isUUID(session.name) && session.name !== session.id) {
+        console.log(`[Store] Cleanup: clearing UUID-based name "${session.name}" from session ${session.id}`);
+        session.name = '';
+        dirty = true;
+      }
+    }
+    // Also clean the global sessionNames map
+    const sessionNames = this._state.sessionNames || {};
+    for (const [uuid, name] of Object.entries(sessionNames)) {
+      if (Store.isUUID(name)) {
+        console.log(`[Store] Cleanup: clearing UUID-based sessionNames entry "${name}" for key ${uuid}`);
+        delete sessionNames[uuid];
+        if (this._state.sessionNameSources) delete this._state.sessionNameSources[uuid];
+        dirty = true;
+      }
+    }
+    return dirty;
+  }
+
+  /**
    * Save state to disk (with backup).
    * Uses write-to-temp-then-rename for atomic writes on crash.
    */
@@ -352,11 +395,11 @@ class Store extends EventEmitter {
       if (session.previousClaudeUUIDs.length > 50) {
         session.previousClaudeUUIDs = session.previousClaudeUUIDs.slice(0, 50);
       }
-      // Auto-named sessions have their displayName reset to the new UUID
-      // (the old name described the old conversation)
+      // Auto-named sessions get their displayName cleared when UUID changes
+      // (the old name described the old conversation; don't replace it with a UUID)
       if (session.nameSource === 'auto') {
-        session.displayName = newUUID;
-        session.name = newUUID; // keep name in sync (backward compat)
+        session.displayName = '';
+        session.name = ''; // keep name in sync (backward compat)
       }
     }
 
@@ -410,6 +453,8 @@ class Store extends EventEmitter {
     if (!claudeUUID || typeof claudeUUID !== 'string') return null;
     if (!name || typeof name !== 'string' || name.trim() === '') return null;
     const trimmed = name.trim().slice(0, 200);
+    // Reject UUID-formatted strings as display names — they're never meaningful titles
+    if (Store.isUUID(trimmed)) return null;
     if (!this._state.sessionNames) this._state.sessionNames = {};
     if (!this._state.sessionNameSources) this._state.sessionNameSources = {};
     // Never overwrite a manually-set name with an auto-assigned one
@@ -583,6 +628,13 @@ class Store extends EventEmitter {
       newWs.sessions.push(id);
     }
 
+    // Reject UUID-formatted strings as display names
+    if (updates.displayName !== undefined && Store.isUUID(updates.displayName)) {
+      updates.displayName = '';
+    }
+    if (updates.name !== undefined && Store.isUUID(updates.name)) {
+      updates.name = '';
+    }
     // Sync name ↔ displayName (whichever one is being updated)
     if (updates.displayName !== undefined && updates.name === undefined) {
       updates.name = updates.displayName;

@@ -3616,6 +3616,8 @@ class CWMApp {
   async syncSessionTitle(claudeSessionId, title, source = 'manual') {
     if (!claudeSessionId || !title || typeof title !== 'string' || title.trim() === '') return;
     const trimmed = title.trim();
+    // Never sync a UUID-formatted string as a display name
+    if (CWMApp.isUUID(trimmed)) return;
     try {
       // Find the managed session that owns this Claude UUID
       const all = this.state.allSessions || this.state.sessions || [];

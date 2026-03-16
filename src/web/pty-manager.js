@@ -15,7 +15,7 @@ const pty = require('node-pty');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { getStore } = require('../state/store');
+const { getStore, Store } = require('../state/store');
 
 /**
  * Resolve the real working directory for a Claude session.
@@ -444,7 +444,7 @@ class PtySessionManager {
 
         console.log(`[PTY] New Claude session UUID for ${sessionId}: ${newUUID}${oldUUID ? ' (was ' + oldUUID + ')' : ''}`);
 
-        let displayName = newUUID; // default: UUID itself
+        let displayName = ''; // empty until a real title is assigned
         let storeWriteSucceeded = false;
         try {
           const store = getStore();
@@ -453,13 +453,13 @@ class PtySessionManager {
           if (storeSession) {
             // setClaudeUUID handles: index update, history, name reset, backward compat, save
             store.setClaudeUUID(sessionId, newUUID);
-            // Read back display name for WS notification
+            // Read back display name for WS notification (skip UUID-shaped values)
             const updated = store.getSession(sessionId);
-            displayName = updated.displayName || updated.name || newUUID;
+            const raw = updated.displayName || updated.name || '';
+            displayName = Store.isUUID(raw) ? '' : raw;
           } else {
-            // No managed session (e.g. "New Session Here" pane) — Phase 4 cleanup
-            store.setSessionName(newUUID, newUUID, 'auto');
-            console.log(`[PTY] Registered UUID ${newUUID} (no store session)`);
+            // No managed session (e.g. "New Session Here" pane) — don't register UUID as a name
+            console.log(`[PTY] Detected UUID ${newUUID} (no store session, skipping name registration)`);
           }
           storeWriteSucceeded = true;
         } catch (_) {}
