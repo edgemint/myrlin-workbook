@@ -400,6 +400,14 @@ class TerminalPane {
       this._replacingText = false;
       const xtermTextarea = container.querySelector('.xterm-helper-textarea');
       if (xtermTextarea) {
+        // Block native paste on xterm's hidden textarea.  We handle Ctrl+V
+        // ourselves in attachCustomKeyEventHandler → pasteFromClipboard(),
+        // but the browser still fires a native 'paste' event on the textarea
+        // which xterm processes via onData — causing a double-paste.
+        xtermTextarea.addEventListener('paste', (e) => {
+          e.preventDefault();
+        });
+
         xtermTextarea.addEventListener('beforeinput', (e) => {
           if (e.inputType === 'insertReplacementText') {
             e.preventDefault();
