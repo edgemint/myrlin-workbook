@@ -8,7 +8,6 @@ node_modules/
 /uploads/
 
 # Claude Code local settings (permissions, project-specific config)
-.claude/
 
 # Environment and secrets
 .env
